@@ -14,14 +14,19 @@ connectDB();
 
 const app = express();
 
-const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean);
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
+  : [];
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Allow same-origin / server-to-server requests (no origin header)
+    if (!origin) return callback(null, true);
+    // Deny if no allowed origins configured, or origin not in the list
+    if (allowedOrigins.length === 0 || !allowedOrigins.includes(origin)) {
+      return callback(new Error('Not allowed by CORS'));
     }
+    callback(null, true);
   },
   credentials: true,
 };
@@ -47,3 +52,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`QuickTopUp backend listening on port ${PORT}`);
 });
+
+module.exports = app;

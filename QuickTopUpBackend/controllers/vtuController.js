@@ -2,188 +2,180 @@ const Wallet = require('../models/walletModel');
 const Transaction = require('../models/transactionModel');
 const generateReference = require('../utils/generateReference');
 const vtuProvider = require('../services/vtuProvider');
+const asyncHandler = require('../middleware/asyncHandler');
 
-const getDataPlans = async (req, res) => {
+const getDataPlans = asyncHandler(async (req, res) => {
   const { network } = req.query;
   if (!network) {
-    return res.status(400).json({ message: 'Network is required to fetch data plans' });
+    res.status(400);
+    throw new Error('Network is required to fetch data plans');
   }
-
   const plans = await vtuProvider.getDataPlans(network);
   res.json({ network, plans });
-};
+});
 
-const validateCustomer = async (req, res) => {
+const validateCustomer = asyncHandler(async (req, res) => {
   const payload = req.body;
   if (!payload || Object.keys(payload).length === 0) {
-    return res.status(400).json({ message: 'Validation payload is required' });
+    res.status(400);
+    throw new Error('Validation payload is required');
   }
-
   const result = await vtuProvider.validateCustomer(payload);
   res.json(result);
-};
+});
 
-const purchaseAirtime = async (req, res) => {
+/**
+ * Shared purchase helper used by all VTU purchase endpoints.
+ *
+ * Key fixes vs the original:
+ *  1. asyncHandler — all DB/provider errors are forwarded to errorHandler.
+ *  2. Atomic debit via wallet.debit() (findOneAndUpdate with balance >= amount)
+ *     prevents concurrent requests from both passing the balance check.
+ *  3. Balance in the response is read AFTER the debit so the value is accurate.
+ *  4. Transaction is created with status 'pending' first, then updated to
+ *     'success'/'failed' based on the provider response — prevents phantom
+ *     success records if the provider call throws.
+ */
+async function handlePurchase({ res, userId, amount, metadata, providerCall, details }) {
+  const wallet = await Wallet.findOne({ user: userId });
+  if (!wallet) {
+    res.status(404);
+    throw new Error('Wallet not found');
+  }
+  if (wallet.balance < amount) {
+    res.status(400);
+    throw new Error('Insufficient wallet balance');
+  }
+
+  const reference = generateReference();
+
+  // Create a pending transaction before calling the provider
+  const transaction = await Transaction.create({
+    user: userId,
+    type: 'purchase',
+    amount,
+    status: 'pending',
+    reference,
+    provider: 'VTU',
+    details,
+    metadata,
+  });
+
+  let providerResponse;
+  let status = 'failed';
+
+  try {
+    providerResponse = await providerCall(reference);
+    status =
+      providerResponse.status === 'success' || providerResponse.success
+        ? 'success'
+        : 'pending';
+  } catch (err) {
+    // Provider call failed — mark transaction failed, do NOT debit
+    transaction.status = 'failed';
+    transaction.details = err.message || 'Provider call failed';
+    await transaction.save();
+    throw err;
+  }
+
+  // Atomic debit — only runs when provider succeeded
+  if (status === 'success') {
+    await wallet.debit(amount); // throws if balance insufficient (race safety)
+  }
+
+  transaction.status = status;
+  transaction.metadata = { ...transaction.metadata, providerResponse };
+  await transaction.save();
+
+  return res.status(200).json({
+    message: 'Purchase request processed',
+    balance: wallet.balance, // post-debit value from the atomic update
+    transaction,
+    providerResponse,
+  });
+}
+
+const purchaseAirtime = asyncHandler(async (req, res) => {
   const { network, phone, amount } = req.body;
   if (!network || !phone || !amount) {
-    return res.status(400).json({ message: 'Network, phone, and amount are required for airtime purchase' });
+    res.status(400);
+    throw new Error('Network, phone, and amount are required for airtime purchase');
   }
-
-  const wallet = await Wallet.findOne({ user: req.user._id });
-  if (!wallet || wallet.balance < amount) {
-    return res.status(400).json({ message: 'Insufficient wallet balance' });
-  }
-
-  const reference = generateReference();
-  const providerResponse = await vtuProvider.purchaseAirtime({ network, phone, amount, reference });
-  const status = providerResponse.status === 'success' || providerResponse.success ? 'success' : 'pending';
-
-  const transaction = await Transaction.create({
-    user: req.user._id,
-    type: 'purchase',
+  await handlePurchase({
+    res,
+    userId: req.user._id,
     amount,
-    status,
-    reference,
-    provider: 'VTU',
-    details: providerResponse.message || `Airtime purchase for ${phone}`,
-    metadata: { service: 'airtime', network, phone, providerResponse },
+    details: `Airtime purchase for ${phone}`,
+    metadata: { service: 'airtime', network, phone },
+    providerCall: (reference) =>
+      vtuProvider.purchaseAirtime({ network, phone, amount, reference }),
   });
+});
 
-  if (status === 'success') {
-    await wallet.debit(amount);
-  }
-
-  res.status(200).json({
-    message: 'Airtime purchase request processed',
-    balance: wallet.balance,
-    transaction,
-    providerResponse,
-  });
-};
-
-const purchaseData = async (req, res) => {
+const purchaseData = asyncHandler(async (req, res) => {
   const { network, phone, bundleCode, amount } = req.body;
   if (!network || !phone || !bundleCode || !amount) {
-    return res.status(400).json({ message: 'Network, phone, bundleCode, and amount are required for data purchase' });
+    res.status(400);
+    throw new Error('Network, phone, bundleCode, and amount are required for data purchase');
   }
-
-  const wallet = await Wallet.findOne({ user: req.user._id });
-  if (!wallet || wallet.balance < amount) {
-    return res.status(400).json({ message: 'Insufficient wallet balance' });
-  }
-
-  const reference = generateReference();
-  const providerResponse = await vtuProvider.purchaseData({ network, phone, bundleCode, amount, reference });
-  const status = providerResponse.status === 'success' || providerResponse.success ? 'success' : 'pending';
-
-  const transaction = await Transaction.create({
-    user: req.user._id,
-    type: 'purchase',
+  await handlePurchase({
+    res,
+    userId: req.user._id,
     amount,
-    status,
-    reference,
-    provider: 'VTU',
-    details: providerResponse.message || `Data bundle purchase for ${phone}`,
-    metadata: { service: 'data', network, phone, bundleCode, providerResponse },
+    details: `Data bundle purchase for ${phone}`,
+    metadata: { service: 'data', network, phone, bundleCode },
+    providerCall: (reference) =>
+      vtuProvider.purchaseData({ network, phone, bundleCode, amount, reference }),
   });
+});
 
-  if (status === 'success') {
-    await wallet.debit(amount);
-  }
-
-  res.status(200).json({
-    message: 'Data purchase request processed',
-    balance: wallet.balance,
-    transaction,
-    providerResponse,
-  });
-};
-
-const purchaseCable = async (req, res) => {
+const purchaseCable = asyncHandler(async (req, res) => {
   const { service, smartcardNumber, packageCode, amount } = req.body;
   if (!service || !smartcardNumber || !packageCode || !amount) {
-    return res.status(400).json({ message: 'Service, smartcardNumber, packageCode, and amount are required for cable purchase' });
+    res.status(400);
+    throw new Error(
+      'Service, smartcardNumber, packageCode, and amount are required for cable purchase'
+    );
   }
-
-  const wallet = await Wallet.findOne({ user: req.user._id });
-  if (!wallet || wallet.balance < amount) {
-    return res.status(400).json({ message: 'Insufficient wallet balance' });
-  }
-
-  const reference = generateReference();
-  const providerResponse = await vtuProvider.purchaseCable({ service, smartcardNumber, packageCode, amount, reference });
-  const status = providerResponse.status === 'success' || providerResponse.success ? 'success' : 'pending';
-
-  const transaction = await Transaction.create({
-    user: req.user._id,
-    type: 'purchase',
+  await handlePurchase({
+    res,
+    userId: req.user._id,
     amount,
-    status,
-    reference,
-    provider: 'VTU',
-    details: providerResponse.message || `Cable purchase for ${service}`,
-    metadata: { service: 'cable', providerService: service, smartcardNumber, packageCode, providerResponse },
+    details: `Cable purchase for ${service}`,
+    metadata: { service: 'cable', providerService: service, smartcardNumber, packageCode },
+    providerCall: (reference) =>
+      vtuProvider.purchaseCable({ service, smartcardNumber, packageCode, amount, reference }),
   });
+});
 
-  if (status === 'success') {
-    await wallet.debit(amount);
-  }
-
-  res.status(200).json({
-    message: 'Cable purchase request processed',
-    balance: wallet.balance,
-    transaction,
-    providerResponse,
-  });
-};
-
-const purchaseElectricity = async (req, res) => {
+const purchaseElectricity = asyncHandler(async (req, res) => {
   const { distributor, meterNumber, meterType, amount } = req.body;
   if (!distributor || !meterNumber || !amount) {
-    return res.status(400).json({ message: 'Distributor, meterNumber, and amount are required for electricity purchase' });
+    res.status(400);
+    throw new Error(
+      'Distributor, meterNumber, and amount are required for electricity purchase'
+    );
   }
-
-  const wallet = await Wallet.findOne({ user: req.user._id });
-  if (!wallet || wallet.balance < amount) {
-    return res.status(400).json({ message: 'Insufficient wallet balance' });
-  }
-
-  const reference = generateReference();
-  const providerResponse = await vtuProvider.purchaseElectricity({ distributor, meterNumber, meterType, amount, reference });
-  const status = providerResponse.status === 'success' || providerResponse.success ? 'success' : 'pending';
-
-  const transaction = await Transaction.create({
-    user: req.user._id,
-    type: 'purchase',
+  await handlePurchase({
+    res,
+    userId: req.user._id,
     amount,
-    status,
-    reference,
-    provider: 'VTU',
-    details: providerResponse.message || `Electricity purchase for meter ${meterNumber}`,
-    metadata: { service: 'electricity', distributor, meterNumber, meterType, providerResponse },
+    details: `Electricity purchase for meter ${meterNumber}`,
+    metadata: { service: 'electricity', distributor, meterNumber, meterType },
+    providerCall: (reference) =>
+      vtuProvider.purchaseElectricity({ distributor, meterNumber, meterType, amount, reference }),
   });
+});
 
-  if (status === 'success') {
-    await wallet.debit(amount);
-  }
-
-  res.status(200).json({
-    message: 'Electricity purchase request processed',
-    balance: wallet.balance,
-    transaction,
-    providerResponse,
-  });
-};
-
-const getTransactionStatus = async (req, res) => {
+const getTransactionStatus = asyncHandler(async (req, res) => {
   const { reference } = req.params;
   if (!reference) {
-    return res.status(400).json({ message: 'Reference is required' });
+    res.status(400);
+    throw new Error('Reference is required');
   }
-
   const status = await vtuProvider.getTransactionStatus(reference);
   res.json(status);
-};
+});
 
 module.exports = {
   getDataPlans,
