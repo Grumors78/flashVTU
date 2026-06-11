@@ -13,6 +13,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
+app.set('trust proxy', 1);
 
 
 const allowedOrigins = process.env.FRONTEND_URL
@@ -31,7 +32,8 @@ const corsOptions = {
   },
   credentials: true,
 };
-app.set('trust proxy', 1);
+
+
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
