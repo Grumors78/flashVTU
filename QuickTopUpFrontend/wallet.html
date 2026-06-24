@@ -98,6 +98,42 @@
       }
     }
 
+    /**
+     * If the user just came back from Paystack's checkout, the URL will have
+     * ?ref=<reference> from the callback_url we set in initiateFund. Verify it
+     * immediately so the balance updates without waiting on the webhook.
+     */
+    async function checkPaystackReturn() {
+      const params = new URLSearchParams(location.search);
+      const reference = params.get('ref') || params.get('reference') || params.get('trxref');
+      if (!reference) return;
+
+      const successBanner = document.getElementById('success-banner');
+      const errorBanner = document.getElementById('error-banner');
+
+      try {
+        const result = await api.verifyFund(reference);
+        if (result.status === 'success') {
+          successBanner.textContent = `Payment confirmed. Your wallet has been credited.`;
+          successBanner.classList.add('is-visible');
+          showToast('Wallet funded successfully', 'success');
+          loadWallet();
+        } else if (result.status === 'pending') {
+          successBanner.textContent = `Payment is still processing. This page will reflect your new balance shortly.`;
+          successBanner.classList.add('is-visible');
+        } else {
+          errorBanner.textContent = `Payment was not completed (status: ${result.status}). No funds were deducted.`;
+          errorBanner.classList.add('is-visible');
+        }
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Could not confirm payment status.';
+        errorBanner.classList.add('is-visible');
+      } finally {
+        // Clean the query string so a page refresh doesn't re-trigger verification
+        history.replaceState({}, '', location.pathname);
+      }
+    }
+
     const amountInput = document.getElementById('amount');
     document.querySelectorAll('.chip[data-amount]').forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -142,6 +178,7 @@
     });
 
     loadWallet();
+    checkPaystackReturn();
   </script>
 </body>
 </html>

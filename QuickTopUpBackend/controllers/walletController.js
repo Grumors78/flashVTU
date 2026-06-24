@@ -1,7 +1,9 @@
+const crypto = require('crypto');
 const Wallet = require('../models/walletModel');
 const Transaction = require('../models/transactionModel');
 const generateReference = require('../utils/generateReference');
 const asyncHandler = require('../middleware/asyncHandler');
+const paystack = require('../services/paystackProvider');
 
 const getWallet = asyncHandler(async (req, res) => {
   const wallet = await Wallet.findOne({ user: req.user._id });
@@ -13,14 +15,10 @@ const getWallet = asyncHandler(async (req, res) => {
 });
 
 /**
- * Wallet funding via Paystack/Flutterwave works in two steps:
- *
- *  1. Client calls POST /api/wallet/initiate-fund to get a payment link.
- *  2. Payment provider calls POST /api/wallet/webhook after the user pays.
- *     Only the webhook actually credits the wallet.
- *
- * The old single-step fundWallet was replaced because it credited the wallet
- * without any proof of payment, making it trivially exploitable.
+ * Step 1 of wallet funding: create a pending transaction, then ask Paystack
+ * to initialize a checkout session. The wallet is NOT credited here — only
+ * the webhook (or verifyFund, as a fallback) credits it, after Paystack
+ * confirms the money actually moved.
  */
 const initiateFund = asyncHandler(async (req, res) => {
   const { amount } = req.body;
@@ -31,7 +29,6 @@ const initiateFund = asyncHandler(async (req, res) => {
 
   const reference = generateReference();
 
-  // Create a PENDING transaction so we can reconcile it when the webhook arrives
   await Transaction.create({
     user: req.user._id,
     type: 'wallet_fund',
@@ -43,49 +40,49 @@ const initiateFund = asyncHandler(async (req, res) => {
     metadata: { source: 'wallet_fund' },
   });
 
-  // TODO: call Paystack/Flutterwave initialise API here and return the
-  // payment URL to the client. Example (Paystack):
-  //
-  //   const paystackRes = await axios.post(
-  //     'https://api.paystack.co/transaction/initialize',
-  //     { email: req.user.email, amount: amount * 100, reference },
-  //     { headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` } }
-  //   );
-  //   return res.json({ paymentUrl: paystackRes.data.data.authorization_url, reference });
+  const frontendUrl = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',')[0].trim()
+    : null;
+  const callbackUrl = frontendUrl ? `${frontendUrl}/wallet.html?ref=${reference}` : undefined;
+
+  const paystackData = await paystack.initializeTransaction({
+    email: req.user.email,
+    amount,
+    reference,
+    callbackUrl,
+    metadata: { userId: req.user._id.toString(), reference },
+  });
 
   res.status(200).json({
-    message: 'Payment initiation placeholder — integrate Paystack/Flutterwave here',
+    message: 'Payment initiated',
     reference,
+    paymentUrl: paystackData.authorization_url,
+    accessCode: paystackData.access_code,
   });
 });
 
 /**
- * Webhook handler — called by Paystack/Flutterwave after a successful payment.
- * Credits the wallet only when the provider confirms the transaction.
- *
- * In production you MUST verify the webhook signature before trusting the payload.
- * See: https://paystack.com/docs/payments/webhooks/
+ * Shared fulfillment logic — credits the wallet for a given reference exactly
+ * once, no matter whether it's called from the webhook or the verify fallback.
+ * Idempotent: if the transaction is already 'success', it's a no-op.
  */
-const paystackWebhook = asyncHandler(async (req, res) => {
-  // TODO: verify HMAC signature
-  // const hash = crypto
-  //   .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-  //   .update(JSON.stringify(req.body))
-  //   .digest('hex');
-  // if (hash !== req.headers['x-paystack-signature']) {
-  //   return res.status(401).json({ message: 'Invalid signature' });
-  // }
-
-  const { event, data } = req.body;
-  if (event !== 'charge.success') return res.sendStatus(200);
-
-  const { reference, amount } = data;
-  const amountNGN = amount / 100; // Paystack sends kobo
-
+async function fulfillFunding(reference, paystackAmountKobo) {
   const transaction = await Transaction.findOne({ reference });
-  if (!transaction || transaction.status === 'success') {
-    // Already processed or unknown reference — respond 200 so provider stops retrying
-    return res.sendStatus(200);
+  if (!transaction) {
+    throw new Error(`No transaction found for reference ${reference}`);
+  }
+  if (transaction.status === 'success') {
+    return { transaction, alreadyProcessed: true };
+  }
+
+  const amountNaira = paystack.toNaira(paystackAmountKobo);
+
+  // Defensive check: the amount Paystack confirms must match what we expected.
+  if (Math.round(amountNaira) !== Math.round(transaction.amount)) {
+    transaction.status = 'failed';
+    transaction.details = `Amount mismatch: expected ₦${transaction.amount}, Paystack confirmed ₦${amountNaira}`;
+    await transaction.save();
+    throw new Error('Payment amount mismatch — transaction flagged as failed');
   }
 
   let wallet = await Wallet.findOne({ user: transaction.user });
@@ -93,19 +90,87 @@ const paystackWebhook = asyncHandler(async (req, res) => {
     wallet = await Wallet.create({ user: transaction.user });
   }
 
-  await wallet.credit(amountNGN);
+  await wallet.credit(amountNaira);
 
   transaction.status = 'success';
-  transaction.details = 'Wallet funded via Paystack webhook';
+  transaction.details = 'Wallet funded via Paystack';
   await transaction.save();
 
+  return { transaction, wallet, alreadyProcessed: false };
+}
+
+/**
+ * Webhook — called by Paystack server-to-server after a successful payment.
+ * Verifies the HMAC signature before trusting the payload, per Paystack's
+ * webhook security guidance: https://paystack.com/docs/payments/webhooks/
+ */
+const paystackWebhook = asyncHandler(async (req, res) => {
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  const signature = req.headers['x-paystack-signature'];
+
+  const hash = crypto
+    .createHmac('sha512', secret)
+    .update(req.rawBody || JSON.stringify(req.body))
+    .digest('hex');
+
+  if (!signature || hash !== signature) {
+    return res.status(401).json({ message: 'Invalid signature' });
+  }
+
+  const { event, data } = req.body;
+
+  // Always respond 200 quickly once verified — Paystack retries on non-2xx.
   res.sendStatus(200);
+
+  if (event !== 'charge.success') return;
+
+  try {
+    await fulfillFunding(data.reference, data.amount);
+  } catch (err) {
+    // Log only — response already sent. A failed fulfillment here can be
+    // reconciled later via the verify endpoint using the same reference.
+    console.error(`Webhook fulfillment error for ${data.reference}:`, err.message);
+  }
 });
 
 /**
- * Generic purchase deduct — used by the wallet purchase route.
- * VTU-specific purchases go through vtuController instead.
+ * Fallback verification — used when the user is redirected back to
+ * wallet.html?ref=... via the callback_url. Lets the frontend confirm
+ * payment immediately without waiting on the webhook.
  */
+const verifyFund = asyncHandler(async (req, res) => {
+  const { reference } = req.params;
+  if (!reference) {
+    res.status(400);
+    throw new Error('Reference is required');
+  }
+
+  const transaction = await Transaction.findOne({ reference, user: req.user._id });
+  if (!transaction) {
+    res.status(404);
+    throw new Error('Transaction not found');
+  }
+
+  if (transaction.status === 'success') {
+    const wallet = await Wallet.findOne({ user: req.user._id });
+    return res.json({ status: 'success', balance: wallet?.balance, transaction });
+  }
+
+  const paystackData = await paystack.verifyTransaction(reference);
+
+  if (paystackData.status !== 'success') {
+    if (paystackData.status === 'failed' || paystackData.status === 'abandoned') {
+      transaction.status = 'failed';
+      transaction.details = `Paystack reported status: ${paystackData.status}`;
+      await transaction.save();
+    }
+    return res.json({ status: paystackData.status, transaction });
+  }
+
+  const { wallet } = await fulfillFunding(reference, paystackData.amount);
+  res.json({ status: 'success', balance: wallet?.balance, transaction });
+});
+
 const purchase = asyncHandler(async (req, res) => {
   const { amount, serviceCode, target } = req.body;
   if (!amount || amount <= 0) {
@@ -132,7 +197,6 @@ const purchase = asyncHandler(async (req, res) => {
     metadata: { target: target || null, serviceCode: serviceCode || null },
   });
 
-  // Atomic debit — throws 'Insufficient wallet balance' if funds are too low
   const updatedWallet = await wallet.debit(amount);
 
   await Transaction.findOneAndUpdate({ reference }, { status: 'success' });
@@ -144,4 +208,4 @@ const purchase = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getWallet, initiateFund, paystackWebhook, purchase };
+module.exports = { getWallet, initiateFund, paystackWebhook, verifyFund, purchase };

@@ -15,16 +15,13 @@ connectDB();
 const app = express();
 app.set('trust proxy', 1);
 
-
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
   : [];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow same-origin / server-to-server requests (no origin header)
     if (!origin) return callback(null, true);
-    // Deny if no allowed origins configured, or origin not in the list
     if (allowedOrigins.length === 0 || !allowedOrigins.includes(origin)) {
       return callback(new Error('Not allowed by CORS'));
     }
@@ -33,10 +30,25 @@ const corsOptions = {
   credentials: true,
 };
 
-
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json());
+
+/**
+ * Capture the raw request body BEFORE JSON parsing, but only for the Paystack
+ * webhook route. Signature verification (HMAC-SHA512) must run against the
+ * exact bytes Paystack sent — re-serializing req.body with JSON.stringify can
+ * produce a different byte sequence (key order/whitespace) and silently break
+ * verification. All other routes use the normal JSON parser untouched.
+ */
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      if (req.originalUrl === '/api/wallet/webhook/paystack') {
+        req.rawBody = buf.toString('utf8');
+      }
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
