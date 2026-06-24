@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="Data">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Buy data</h1>
+          <p class="page-subtitle">Choose a network, then pick a bundle.</p>
+        </div>
+      </div>
+
+      <div class="grid grid--2" style="align-items: start;">
+        <section class="card card--pad">
+          <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+          <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Network</label>
+          <div class="network-grid" id="network-grid">
+            <button type="button" class="network-option" data-network="mtn">
+              <span class="network-option__badge" style="background:#FFD200; color:#1A1A1A;">MTN</span>
+              <span class="network-option__name">MTN</span>
+            </button>
+            <button type="button" class="network-option" data-network="airtel">
+              <span class="network-option__badge" style="background:#FF0000;">A</span>
+              <span class="network-option__name">Airtel</span>
+            </button>
+            <button type="button" class="network-option" data-network="glo">
+              <span class="network-option__badge" style="background:#00A651;">G</span>
+              <span class="network-option__name">Glo</span>
+            </button>
+            <button type="button" class="network-option" data-network="9mobile">
+              <span class="network-option__badge" style="background:#00B14E;">9</span>
+              <span class="network-option__name">9mobile</span>
+            </button>
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="phone">Phone number</label>
+            <input class="field__input" type="tel" id="phone" name="phone" placeholder="080XXXXXXXX" required pattern="^0\d{10}$" maxlength="11" />
+          </div>
+
+          <div class="field" id="plans-field" style="display:none;">
+            <label class="field__label">Available bundles</label>
+            <div id="plans-list"></div>
+          </div>
+
+          <button class="btn btn--primary btn--block" type="submit" form="data-form" id="submit-btn" disabled>Select a plan to continue</button>
+        </section>
+
+        <aside class="card card--pad">
+          <h2 style="font-family: var(--font-display); font-size: var(--text-base); margin-bottom: var(--space-3);">Wallet balance</h2>
+          <div style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600;" id="mini-balance">
+            <span class="skeleton" style="display:inline-block;width:120px;height:32px;"></span>
+          </div>
+          <a href="wallet.html" class="btn btn--secondary btn--block" style="margin-top: var(--space-4);">Fund wallet</a>
+        </aside>
+      </div>
+      <form id="data-form" style="display:none;"></form>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    let selectedNetwork = null;
+    let selectedPlan = null;
+
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+    const plansField = document.getElementById('plans-field');
+    const plansList = document.getElementById('plans-list');
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.add('is-visible');
+    }
+    function hideError() {
+      errorBanner.classList.remove('is-visible');
+    }
+
+    function updateSubmitState() {
+      const ready = selectedNetwork && selectedPlan;
+      submitBtn.disabled = !ready;
+      submitBtn.textContent = ready ? `Buy bundle — ₦${formatNaira(selectedPlan.amount)}` : 'Select a plan to continue';
+    }
+
+    async function loadPlans(network) {
+      plansField.style.display = 'block';
+      plansList.innerHTML = `<div class="skeleton" style="height:48px; margin-bottom:8px;"></div><div class="skeleton" style="height:48px;"></div>`;
+      try {
+        const { plans } = await api.getDataPlans(network);
+        if (!plans || plans.length === 0) {
+          plansList.innerHTML = `<p style="color:var(--text-tertiary); font-size: var(--text-sm);">No bundles available for this network right now.</p>`;
+          return;
+        }
+        plansList.innerHTML = plans.map((plan, i) => `
+          <button type="button" class="chip" style="display:flex; justify-content:space-between; width:100%; margin-bottom:8px; text-align:left;" data-plan-index="${i}">
+            <span>${plan.name || plan.title || plan.bundleCode}</span>
+            <span class="numeric">₦${formatNaira(plan.amount || plan.price || 0)}</span>
+          </button>
+        `).join('');
+
+        plansList.querySelectorAll('[data-plan-index]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            plansList.querySelectorAll('.chip').forEach((c) => c.classList.remove('is-selected'));
+            btn.classList.add('is-selected');
+            const plan = plans[Number(btn.dataset.planIndex)];
+            selectedPlan = {
+              bundleCode: plan.bundleCode || plan.code,
+              amount: plan.amount || plan.price || 0,
+            };
+            updateSubmitState();
+          });
+        });
+      } catch (err) {
+        plansList.innerHTML = `<p style="color:var(--error); font-size: var(--text-sm);">${err.message || 'Could not load bundles for this network.'}</p>`;
+      }
+    }
+
+    document.querySelectorAll('.network-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+        selectedNetwork = btn.dataset.network;
+        selectedPlan = null;
+        updateSubmitState();
+        loadPlans(selectedNetwork);
+      });
+    });
+
+    document.getElementById('data-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+
+      const phone = document.getElementById('phone').value.trim();
+      if (!/^0\d{10}$/.test(phone)) {
+        showError('Enter a valid 11-digit phone number.');
+        return;
+      }
+      if (!selectedNetwork || !selectedPlan) {
+        showError('Select a network and bundle to continue.');
+        return;
+      }
+
+      setButtonLoading(submitBtn, true, 'Processing…');
+      try {
+        const result = await api.buyData({
+          network: selectedNetwork,
+          phone,
+          bundleCode: selectedPlan.bundleCode,
+          amount: selectedPlan.amount,
+        });
+        showToast(`Data purchase ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
+        document.getElementById('phone').value = '';
+        loadBalance();
+      } catch (err) {
+        showError(err.message || 'Purchase failed. Please try again.');
+      } finally {
+        setButtonLoading(submitBtn, false);
+        updateSubmitState();
+      }
+    });
+
+    async function loadBalance() {
+      try {
+        const wallet = await api.getWallet();
+        document.getElementById('mini-balance').textContent = `₦${formatNaira(wallet.balance)}`;
+      } catch {
+        document.getElementById('mini-balance').textContent = '—';
+      }
+    }
+
+    loadBalance();
+  </script>
+</body>
+</html>

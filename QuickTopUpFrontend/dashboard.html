@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="Dashboard">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Good to see you<span id="greeting-name"></span></h1>
+          <p class="page-subtitle">Here's what's happening with your wallet today.</p>
+        </div>
+      </div>
+
+      <section class="balance-card" style="margin-bottom: var(--space-6);">
+        <div class="balance-card__label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          Wallet balance
+        </div>
+        <div class="balance-card__amount" id="balance-amount">
+          <sup>₦</sup><span class="skeleton" style="display:inline-block;width:160px;height:40px;"></span>
+        </div>
+        <div class="charge-bar" id="charge-bar" aria-hidden="true">
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+          <div class="charge-bar__segment"></div>
+        </div>
+        <div class="balance-card__meta">
+          <span id="last-updated">Updating…</span>
+          <span id="currency-label">NGN</span>
+        </div>
+        <div class="balance-card__actions">
+          <a href="wallet.html" class="btn btn--primary">Fund wallet</a>
+          <a href="history.html" class="btn btn--ghost">View history</a>
+        </div>
+      </section>
+
+      <h2 style="font-family: var(--font-display); font-size: var(--text-lg); margin-bottom: var(--space-4);">Quick actions</h2>
+      <div class="service-grid" style="margin-bottom: var(--space-6);">
+        <a href="airtime.html" class="service-card">
+          <div class="service-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg>
+          </div>
+          <div class="service-card__title">Airtime</div>
+          <div class="service-card__desc">Top up any network instantly</div>
+          <div class="signal-mini"><span></span><span></span><span></span><span></span></div>
+        </a>
+        <a href="data.html" class="service-card">
+          <div class="service-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h2v-4H3v4zM8 20h2v-9H8v9zM13 20h2v-14h-2v14zM18 20h2V4h-2v16z"/></svg>
+          </div>
+          <div class="service-card__title">Data</div>
+          <div class="service-card__desc">Browse and buy data bundles</div>
+          <div class="signal-mini"><span></span><span></span><span></span><span></span></div>
+        </a>
+        <a href="cable.html" class="service-card">
+          <div class="service-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M8 21h8M12 19v2"/></svg>
+          </div>
+          <div class="service-card__title">Cable TV</div>
+          <div class="service-card__desc">DStv, GOtv, Startimes</div>
+          <div class="signal-mini"><span></span><span></span><span></span><span></span></div>
+        </a>
+        <a href="electricity.html" class="service-card">
+          <div class="service-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+          </div>
+          <div class="service-card__title">Electricity</div>
+          <div class="service-card__desc">Pay your disco bill</div>
+          <div class="signal-mini"><span></span><span></span><span></span><span></span></div>
+        </a>
+      </div>
+
+      <div class="card card--pad">
+        <div class="topbar" style="margin-bottom: var(--space-4);">
+          <h2 style="font-family: var(--font-display); font-size: var(--text-lg);">Recent activity</h2>
+          <a href="history.html" class="btn btn--ghost btn--sm">View all</a>
+        </div>
+        <div class="tx-list" id="recent-tx-list">
+          <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:56px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    const user = getStoredUser();
+    if (user?.name) {
+      document.getElementById('greeting-name').textContent = `, ${user.name.split(' ')[0]}`;
+    }
+
+    function renderChargeBar(balance) {
+      const segments = document.querySelectorAll('#charge-bar .charge-bar__segment');
+      // Charged segment count scales with balance, capped at 8, mostly cosmetic feedback
+      const charged = Math.min(8, Math.max(1, Math.ceil((balance / 5000) * 8) || 1));
+      segments.forEach((seg, i) => {
+        seg.classList.toggle('is-charged', i < charged);
+      });
+    }
+
+    function txIcon(type) {
+      if (type === 'wallet_fund' || type === 'refund') {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
+    }
+
+    function renderTxRow(tx) {
+      const isCredit = tx.type === 'wallet_fund' || tx.type === 'refund';
+      const label = {
+        wallet_fund: 'Wallet funding',
+        purchase: tx.metadata?.service ? `${tx.metadata.service.charAt(0).toUpperCase()}${tx.metadata.service.slice(1)} purchase` : 'Purchase',
+        refund: 'Refund',
+        commission: 'Commission',
+      }[tx.type] || tx.type;
+
+      return `
+        <div class="tx-row">
+          <div class="tx-row__icon ${isCredit ? 'is-credit' : 'is-debit'}">${txIcon(tx.type)}</div>
+          <div class="tx-row__body">
+            <div class="tx-row__title">${label}</div>
+            <div class="tx-row__meta">${tx.reference} · ${formatDate(tx.createdAt)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="tx-row__amount ${isCredit ? 'is-credit' : 'is-debit'}">${isCredit ? '+' : '-'}₦${formatNaira(tx.amount)}</div>
+            <span class="status-pill is-${tx.status}">${tx.status}</span>
+          </div>
+        </div>`;
+    }
+
+    async function loadDashboard() {
+      try {
+        const wallet = await api.getWallet();
+        document.getElementById('balance-amount').innerHTML = `<sup>₦</sup>${formatNaira(wallet.balance)}`;
+        document.getElementById('currency-label').textContent = wallet.currency || 'NGN';
+        document.getElementById('last-updated').textContent = `Updated ${formatDate(wallet.updatedAt || new Date())}`;
+        renderChargeBar(wallet.balance);
+      } catch (err) {
+        document.getElementById('balance-amount').innerHTML = `<sup>₦</sup>0.00`;
+        showToast(err.message || 'Could not load wallet balance', 'error');
+      }
+
+      try {
+        const result = await api.getTransactions(1, 5);
+        const txs = result.transactions || [];
+        const list = document.getElementById('recent-tx-list');
+        if (txs.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <svg class="empty-state__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
+              <div class="empty-state__title">No activity yet</div>
+              <p>Fund your wallet to get started.</p>
+            </div>`;
+        } else {
+          list.innerHTML = txs.map(renderTxRow).join('');
+        }
+      } catch (err) {
+        document.getElementById('recent-tx-list').innerHTML = `<p style="color: var(--text-tertiary); text-align:center; padding: var(--space-5);">Could not load recent activity.</p>`;
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

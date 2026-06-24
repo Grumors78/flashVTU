@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Airtime — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="Airtime">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Buy airtime</h1>
+          <p class="page-subtitle">Top up any Nigerian network instantly.</p>
+        </div>
+      </div>
+
+      <div class="grid grid--2" style="align-items: start;">
+        <section class="card card--pad">
+          <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+          <form id="airtime-form" novalidate>
+            <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Network</label>
+            <div class="network-grid" id="network-grid">
+              <button type="button" class="network-option" data-network="mtn">
+                <span class="network-option__badge" style="background:#FFD200; color:#1A1A1A;">MTN</span>
+                <span class="network-option__name">MTN</span>
+              </button>
+              <button type="button" class="network-option" data-network="airtel">
+                <span class="network-option__badge" style="background:#FF0000;">A</span>
+                <span class="network-option__name">Airtel</span>
+              </button>
+              <button type="button" class="network-option" data-network="glo">
+                <span class="network-option__badge" style="background:#00A651;">G</span>
+                <span class="network-option__name">Glo</span>
+              </button>
+              <button type="button" class="network-option" data-network="9mobile">
+                <span class="network-option__badge" style="background:#00B14E;">9</span>
+                <span class="network-option__name">9mobile</span>
+              </button>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="phone">Phone number</label>
+              <input class="field__input" type="tel" id="phone" name="phone" placeholder="080XXXXXXXX" required pattern="^0\d{10}$" maxlength="11" />
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="amount">Amount</label>
+              <div class="amount-input">
+                <span class="amount-input__prefix">₦</span>
+                <input class="field__input" type="number" id="amount" name="amount" min="50" step="50" placeholder="0.00" required />
+              </div>
+              <div class="chip-row">
+                <button type="button" class="chip" data-amount="100">₦100</button>
+                <button type="button" class="chip" data-amount="200">₦200</button>
+                <button type="button" class="chip" data-amount="500">₦500</button>
+                <button type="button" class="chip" data-amount="1000">₦1,000</button>
+              </div>
+            </div>
+
+            <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Buy airtime</button>
+          </form>
+        </section>
+
+        <aside class="card card--pad">
+          <h2 style="font-family: var(--font-display); font-size: var(--text-base); margin-bottom: var(--space-3);">Wallet balance</h2>
+          <div style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600;" id="mini-balance">
+            <span class="skeleton" style="display:inline-block;width:120px;height:32px;"></span>
+          </div>
+          <a href="wallet.html" class="btn btn--secondary btn--block" style="margin-top: var(--space-4);">Fund wallet</a>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    let selectedNetwork = null;
+    document.querySelectorAll('.network-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+        selectedNetwork = btn.dataset.network;
+      });
+    });
+
+    const amountInput = document.getElementById('amount');
+    document.querySelectorAll('.chip[data-amount]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip[data-amount]').forEach((c) => c.classList.remove('is-selected'));
+        chip.classList.add('is-selected');
+        amountInput.value = chip.dataset.amount;
+      });
+    });
+
+    async function loadBalance() {
+      try {
+        const wallet = await api.getWallet();
+        document.getElementById('mini-balance').textContent = `₦${formatNaira(wallet.balance)}`;
+      } catch {
+        document.getElementById('mini-balance').textContent = '—';
+      }
+    }
+
+    const form = document.getElementById('airtime-form');
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBanner.classList.remove('is-visible');
+
+      const phone = document.getElementById('phone').value.trim();
+      const amount = Number(amountInput.value);
+
+      if (!selectedNetwork) {
+        errorBanner.textContent = 'Select a network to continue.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!/^0\d{10}$/.test(phone)) {
+        errorBanner.textContent = 'Enter a valid 11-digit phone number.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!amount || amount <= 0) {
+        errorBanner.textContent = 'Enter a valid amount.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(submitBtn, true, 'Processing…');
+      try {
+        const result = await api.buyAirtime({ network: selectedNetwork, phone, amount });
+        showToast(`Airtime purchase ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
+        form.reset();
+        document.querySelectorAll('.network-option, .chip').forEach((el) => el.classList.remove('is-selected'));
+        selectedNetwork = null;
+        loadBalance();
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Purchase failed. Please try again.';
+        errorBanner.classList.add('is-visible');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+
+    loadBalance();
+  </script>
+</body>
+</html>

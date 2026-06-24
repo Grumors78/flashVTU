@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/auth.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-form-side fade-in">
+      <div class="brand">
+        <div class="brand__mark">Q</div>
+        <span class="brand__name">QuickTopUp</span>
+      </div>
+
+      <h1 class="auth-heading">Create your account</h1>
+      <p class="auth-subheading">Set up your wallet in under a minute.</p>
+
+      <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+      <form class="auth-form" id="register-form" novalidate>
+        <div class="field">
+          <label class="field__label" for="name">Full name</label>
+          <input class="field__input" type="text" id="name" name="name" placeholder="Dominion Owei" required autocomplete="name" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="email">Email</label>
+          <input class="field__input" type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="password">Password</label>
+          <input class="field__input" type="password" id="password" name="password" placeholder="At least 8 characters, with letters and numbers" required autocomplete="new-password" minlength="8" />
+          <span class="field__error" id="password-hint" style="color: var(--text-tertiary);">Must be 8+ characters with at least one letter and one number.</span>
+        </div>
+        <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Create account</button>
+      </form>
+
+      <p class="auth-switch">Already have an account? <a href="login.html">Sign in</a></p>
+    </div>
+
+    <div class="auth-visual">
+      <div class="auth-visual__grid"></div>
+      <div class="auth-visual__content">
+        <div class="auth-visual__bars">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <h2 class="auth-visual__title">One wallet for every network and biller</h2>
+        <p class="auth-visual__desc">MTN, Airtel, Glo, 9mobile, DStv, GOtv, and your disco — all from one balance.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script>
+    redirectIfAuthed();
+
+    const form = document.getElementById('register-form');
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.add('is-visible');
+    }
+    function hideError() {
+      errorBanner.classList.remove('is-visible');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+
+      const name = form.name.value.trim();
+      const email = form.email.value.trim();
+      const password = form.password.value;
+
+      const complexityRe = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+      if (!complexityRe.test(password)) {
+        showError('Password must be at least 8 characters and contain both letters and numbers.');
+        return;
+      }
+
+      setButtonLoading(submitBtn, true, 'Creating account…');
+      try {
+        const data = await api.register({ name, email, password });
+        setToken(data.token);
+        setStoredUser({ id: data.id, name: data.name, email: data.email, role: data.role });
+        location.href = 'dashboard.html';
+      } catch (err) {
+        showError(err.message || 'Something went wrong. Please try again.');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electricity — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="Electricity">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Electricity</h1>
+          <p class="page-subtitle">Pay your prepaid or postpaid disco bill.</p>
+        </div>
+      </div>
+
+      <div class="grid grid--2" style="align-items: start;">
+        <section class="card card--pad">
+          <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+          <form id="electricity-form" novalidate>
+            <div class="field">
+              <label class="field__label" for="distributor">Distribution company (disco)</label>
+              <select class="field__select" id="distributor" name="distributor" required>
+                <option value="" disabled selected>Select your disco</option>
+                <option value="ikedc">Ikeja Electric (IKEDC)</option>
+                <option value="ekedc">Eko Electricity (EKEDC)</option>
+                <option value="aedc">Abuja Electricity (AEDC)</option>
+                <option value="phed">Port Harcourt Electric (PHED)</option>
+                <option value="ibedc">Ibadan Electricity (IBEDC)</option>
+                <option value="kedco">Kano Electricity (KEDCO)</option>
+                <option value="eedc">Enugu Electricity (EEDC)</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field__label">Meter type</label>
+              <div class="chip-row" id="meter-type-row">
+                <button type="button" class="chip" data-meter-type="prepaid">Prepaid</button>
+                <button type="button" class="chip" data-meter-type="postpaid">Postpaid</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="meterNumber">Meter number</label>
+              <input class="field__input" type="text" id="meterNumber" name="meterNumber" placeholder="e.g. 04012345678" required />
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="amount">Amount</label>
+              <div class="amount-input">
+                <span class="amount-input__prefix">₦</span>
+                <input class="field__input" type="number" id="amount" name="amount" min="500" step="100" placeholder="0.00" required />
+              </div>
+              <div class="chip-row">
+                <button type="button" class="chip" data-amount="1000">₦1,000</button>
+                <button type="button" class="chip" data-amount="2000">₦2,000</button>
+                <button type="button" class="chip" data-amount="5000">₦5,000</button>
+                <button type="button" class="chip" data-amount="10000">₦10,000</button>
+              </div>
+            </div>
+
+            <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Pay bill</button>
+          </form>
+        </section>
+
+        <aside class="card card--pad">
+          <h2 style="font-family: var(--font-display); font-size: var(--text-base); margin-bottom: var(--space-3);">Wallet balance</h2>
+          <div style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600;" id="mini-balance">
+            <span class="skeleton" style="display:inline-block;width:120px;height:32px;"></span>
+          </div>
+          <a href="wallet.html" class="btn btn--secondary btn--block" style="margin-top: var(--space-4);">Fund wallet</a>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    let selectedMeterType = null;
+    document.querySelectorAll('#meter-type-row .chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#meter-type-row .chip').forEach((c) => c.classList.remove('is-selected'));
+        chip.classList.add('is-selected');
+        selectedMeterType = chip.dataset.meterType;
+      });
+    });
+
+    const amountInput = document.getElementById('amount');
+    document.querySelectorAll('.chip[data-amount]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip[data-amount]').forEach((c) => c.classList.remove('is-selected'));
+        chip.classList.add('is-selected');
+        amountInput.value = chip.dataset.amount;
+      });
+    });
+
+    async function loadBalance() {
+      try {
+        const wallet = await api.getWallet();
+        document.getElementById('mini-balance').textContent = `₦${formatNaira(wallet.balance)}`;
+      } catch {
+        document.getElementById('mini-balance').textContent = '—';
+      }
+    }
+
+    const form = document.getElementById('electricity-form');
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBanner.classList.remove('is-visible');
+
+      const distributor = document.getElementById('distributor').value;
+      const meterNumber = document.getElementById('meterNumber').value.trim();
+      const amount = Number(amountInput.value);
+
+      if (!distributor) {
+        errorBanner.textContent = 'Select your distribution company.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!meterNumber) {
+        errorBanner.textContent = 'Enter your meter number.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!amount || amount <= 0) {
+        errorBanner.textContent = 'Enter a valid amount.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(submitBtn, true, 'Processing…');
+      try {
+        const result = await api.buyElectricity({ distributor, meterNumber, meterType: selectedMeterType || 'prepaid', amount });
+        showToast(`Bill payment ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
+        form.reset();
+        document.querySelectorAll('.chip').forEach((el) => el.classList.remove('is-selected'));
+        selectedMeterType = null;
+        loadBalance();
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Payment failed. Please try again.';
+        errorBanner.classList.add('is-visible');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+
+    loadBalance();
+  </script>
+</body>
+</html>

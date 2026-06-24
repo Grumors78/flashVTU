@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/auth.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-form-side fade-in">
+      <div class="brand">
+        <div class="brand__mark">Q</div>
+        <span class="brand__name">QuickTopUp</span>
+      </div>
+
+      <h1 class="auth-heading">Welcome back</h1>
+      <p class="auth-subheading">Sign in to top up airtime, data, and pay bills in seconds.</p>
+
+      <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+      <form class="auth-form" id="login-form" novalidate>
+        <div class="field">
+          <label class="field__label" for="email">Email</label>
+          <input class="field__input" type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="password">Password</label>
+          <input class="field__input" type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Sign in</button>
+      </form>
+
+      <p class="auth-switch">Don't have an account? <a href="register.html">Create one</a></p>
+    </div>
+
+    <div class="auth-visual">
+      <div class="auth-visual__grid"></div>
+      <div class="auth-visual__content">
+        <div class="auth-visual__bars">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <h2 class="auth-visual__title">Instant top-ups, always charged and ready</h2>
+        <p class="auth-visual__desc">Airtime, data, cable, and electricity — paid for in seconds, tracked to the kobo.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script>
+    redirectIfAuthed();
+
+    const form = document.getElementById('login-form');
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.add('is-visible');
+    }
+
+    function hideError() {
+      errorBanner.classList.remove('is-visible');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+
+      const email = form.email.value.trim();
+      const password = form.password.value;
+
+      setButtonLoading(submitBtn, true, 'Signing in…');
+      try {
+        const data = await api.login({ email, password });
+        setToken(data.token);
+        setStoredUser({ id: data.id, name: data.name, email: data.email, role: data.role });
+        location.href = 'dashboard.html';
+      } catch (err) {
+        showError(err.message || 'Something went wrong. Please try again.');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+  </script>
+</body>
+</html>

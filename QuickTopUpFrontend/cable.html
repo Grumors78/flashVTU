@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cable TV — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="Cable TV">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Cable TV</h1>
+          <p class="page-subtitle">Renew your DStv, GOtv, or Startimes subscription.</p>
+        </div>
+      </div>
+
+      <div class="grid grid--2" style="align-items: start;">
+        <section class="card card--pad">
+          <div class="auth-error-banner" id="error-banner" role="alert"></div>
+
+          <form id="cable-form" novalidate>
+            <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Service</label>
+            <div class="network-grid" id="service-grid" style="grid-template-columns: repeat(3, 1fr);">
+              <button type="button" class="network-option" data-service="dstv">
+                <span class="network-option__badge" style="background:#003C7E;">DS</span>
+                <span class="network-option__name">DStv</span>
+              </button>
+              <button type="button" class="network-option" data-service="gotv">
+                <span class="network-option__badge" style="background:#00A859;">GO</span>
+                <span class="network-option__name">GOtv</span>
+              </button>
+              <button type="button" class="network-option" data-service="startimes">
+                <span class="network-option__badge" style="background:#E4002B;">ST</span>
+                <span class="network-option__name">Startimes</span>
+              </button>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="smartcard">Smartcard / IUC number</label>
+              <input class="field__input" type="text" id="smartcard" name="smartcard" placeholder="e.g. 1234567890" required />
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="package">Package</label>
+              <select class="field__select" id="package" name="package" required>
+                <option value="" disabled selected>Select a package</option>
+                <option value="compact" data-amount="19000">Compact — ₦19,000</option>
+                <option value="compact_plus" data-amount="29500">Compact Plus — ₦29,500</option>
+                <option value="premium" data-amount="44500">Premium — ₦44,500</option>
+                <option value="confam" data-amount="6200">Confam — ₦6,200</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="amount">Amount</label>
+              <div class="amount-input">
+                <span class="amount-input__prefix">₦</span>
+                <input class="field__input" type="number" id="amount" name="amount" min="100" step="50" placeholder="0.00" required />
+              </div>
+            </div>
+
+            <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Subscribe</button>
+          </form>
+        </section>
+
+        <aside class="card card--pad">
+          <h2 style="font-family: var(--font-display); font-size: var(--text-base); margin-bottom: var(--space-3);">Wallet balance</h2>
+          <div style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600;" id="mini-balance">
+            <span class="skeleton" style="display:inline-block;width:120px;height:32px;"></span>
+          </div>
+          <a href="wallet.html" class="btn btn--secondary btn--block" style="margin-top: var(--space-4);">Fund wallet</a>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    let selectedService = null;
+    document.querySelectorAll('.network-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+        selectedService = btn.dataset.service;
+      });
+    });
+
+    const packageSelect = document.getElementById('package');
+    const amountInput = document.getElementById('amount');
+    packageSelect.addEventListener('change', () => {
+      const opt = packageSelect.selectedOptions[0];
+      amountInput.value = opt?.dataset.amount || '';
+    });
+
+    async function loadBalance() {
+      try {
+        const wallet = await api.getWallet();
+        document.getElementById('mini-balance').textContent = `₦${formatNaira(wallet.balance)}`;
+      } catch {
+        document.getElementById('mini-balance').textContent = '—';
+      }
+    }
+
+    const form = document.getElementById('cable-form');
+    const errorBanner = document.getElementById('error-banner');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBanner.classList.remove('is-visible');
+
+      const smartcardNumber = document.getElementById('smartcard').value.trim();
+      const packageCode = packageSelect.value;
+      const amount = Number(amountInput.value);
+
+      if (!selectedService) {
+        errorBanner.textContent = 'Select a cable provider to continue.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!smartcardNumber) {
+        errorBanner.textContent = 'Enter your smartcard or IUC number.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!packageCode) {
+        errorBanner.textContent = 'Select a package.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!amount || amount <= 0) {
+        errorBanner.textContent = 'Enter a valid amount.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(submitBtn, true, 'Processing…');
+      try {
+        const result = await api.buyCable({ service: selectedService, smartcardNumber, packageCode, amount });
+        showToast(`Cable subscription ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
+        form.reset();
+        document.querySelectorAll('.network-option').forEach((el) => el.classList.remove('is-selected'));
+        selectedService = null;
+        loadBalance();
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Subscription failed. Please try again.';
+        errorBanner.classList.add('is-visible');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+
+    loadBalance();
+  </script>
+</body>
+</html>

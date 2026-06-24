@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>History — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body data-page-title="History">
+  <div id="mobile-topbar-root"></div>
+  <div class="app-shell">
+    <div id="sidebar-root"></div>
+
+    <main class="main fade-in">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Transaction history</h1>
+          <p class="page-subtitle">Every funding, purchase, and bill payment, in one place.</p>
+        </div>
+      </div>
+
+      <div class="card card--pad">
+        <div class="topbar" style="margin-bottom: var(--space-4);">
+          <div class="chip-row" id="filter-row" style="margin-top:0;">
+            <button type="button" class="chip is-selected" data-filter="all">All</button>
+            <button type="button" class="chip" data-filter="wallet_fund">Funding</button>
+            <button type="button" class="chip" data-filter="purchase">Purchases</button>
+          </div>
+          <button class="btn btn--ghost btn--sm" id="refresh-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </button>
+        </div>
+
+        <div class="tx-list" id="tx-list">
+          <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:56px;"></div>
+        </div>
+
+        <div id="pagination-row" style="display:flex; justify-content:space-between; align-items:center; margin-top: var(--space-5);">
+          <span id="page-info" style="font-size: var(--text-sm); color: var(--text-tertiary);"></span>
+          <div style="display:flex; gap: var(--space-2);">
+            <button class="btn btn--ghost btn--sm" id="prev-btn" type="button">Previous</button>
+            <button class="btn btn--ghost btn--sm" id="next-btn" type="button">Next</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script>
+    requireAuth();
+
+    let currentPage = 1;
+    let currentFilter = 'all';
+    let totalPages = 1;
+
+    function txIcon(type) {
+      const isCredit = type === 'wallet_fund' || type === 'refund';
+      return isCredit
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
+    }
+
+    function renderTxRow(tx) {
+      const isCredit = tx.type === 'wallet_fund' || tx.type === 'refund';
+      const label = {
+        wallet_fund: 'Wallet funding',
+        purchase: tx.metadata?.service ? `${tx.metadata.service.charAt(0).toUpperCase()}${tx.metadata.service.slice(1)} purchase` : 'Purchase',
+        refund: 'Refund',
+        commission: 'Commission',
+      }[tx.type] || tx.type;
+
+      return `
+        <div class="tx-row">
+          <div class="tx-row__icon ${isCredit ? 'is-credit' : 'is-debit'}">${txIcon(tx.type)}</div>
+          <div class="tx-row__body">
+            <div class="tx-row__title">${label}</div>
+            <div class="tx-row__meta">${tx.reference} · ${formatDate(tx.createdAt)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="tx-row__amount ${isCredit ? 'is-credit' : 'is-debit'}">${isCredit ? '+' : '-'}₦${formatNaira(tx.amount)}</div>
+            <span class="status-pill is-${tx.status}">${tx.status}</span>
+          </div>
+        </div>`;
+    }
+
+    async function loadHistory() {
+      const list = document.getElementById('tx-list');
+      list.innerHTML = `
+        <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:56px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:56px;"></div>`;
+
+      try {
+        const result = await api.getTransactions(currentPage, 20);
+        let txs = result.transactions || [];
+
+        if (currentFilter !== 'all') {
+          txs = txs.filter((tx) => tx.type === currentFilter);
+        }
+
+        totalPages = result.pagination?.pages || 1;
+        document.getElementById('page-info').textContent =
+          `Page ${result.pagination?.page || 1} of ${totalPages} · ${result.pagination?.total || txs.length} total`;
+
+        document.getElementById('prev-btn').disabled = currentPage <= 1;
+        document.getElementById('next-btn').disabled = currentPage >= totalPages;
+
+        if (txs.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <svg class="empty-state__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
+              <div class="empty-state__title">No transactions found</div>
+              <p>Try a different filter or fund your wallet to get started.</p>
+            </div>`;
+        } else {
+          list.innerHTML = txs.map(renderTxRow).join('');
+        }
+      } catch (err) {
+        list.innerHTML = `<p style="color: var(--error); text-align:center; padding: var(--space-5);">${err.message || 'Could not load transaction history.'}</p>`;
+      }
+    }
+
+    document.querySelectorAll('#filter-row .chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#filter-row .chip').forEach((c) => c.classList.remove('is-selected'));
+        chip.classList.add('is-selected');
+        currentFilter = chip.dataset.filter;
+        currentPage = 1;
+        loadHistory();
+      });
+    });
+
+    document.getElementById('prev-btn').addEventListener('click', () => {
+      if (currentPage > 1) { currentPage--; loadHistory(); }
+    });
+    document.getElementById('next-btn').addEventListener('click', () => {
+      if (currentPage < totalPages) { currentPage++; loadHistory(); }
+    });
+    document.getElementById('refresh-btn').addEventListener('click', loadHistory);
+
+    loadHistory();
+  </script>
+</body>
+</html>
