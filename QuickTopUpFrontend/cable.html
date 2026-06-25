@@ -25,6 +25,7 @@
       <div class="grid grid--2" style="align-items: start;">
         <section class="card card--pad">
           <div class="auth-error-banner" id="error-banner" role="alert"></div>
+          <div class="auth-error-banner" id="verify-banner" style="background: var(--accent-bg); border-color: var(--accent-dim); color: var(--accent); display:none;"></div>
 
           <form id="cable-form" novalidate>
             <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Service</label>
@@ -48,15 +49,19 @@
               <input class="field__input" type="text" id="smartcard" name="smartcard" placeholder="e.g. 1234567890" required />
             </div>
 
+            <button class="btn btn--secondary btn--block" type="button" id="verify-btn" style="margin-bottom: var(--space-4);">Verify IUC number</button>
+
             <div class="field">
-              <label class="field__label" for="package">Package</label>
-              <select class="field__select" id="package" name="package" required>
-                <option value="" disabled selected>Select a package</option>
-                <option value="compact" data-amount="19000">Compact — ₦19,000</option>
-                <option value="compact_plus" data-amount="29500">Compact Plus — ₦29,500</option>
-                <option value="premium" data-amount="44500">Premium — ₦44,500</option>
-                <option value="confam" data-amount="6200">Confam — ₦6,200</option>
-              </select>
+              <label class="field__label" for="package">Plan</label>
+              <input class="field__input" type="text" id="package" name="package" placeholder="e.g. nova, padi, compact (PeyFlex plan code)" required />
+              <span class="field__error" style="color: var(--text-tertiary);">
+                Enter the exact PeyFlex plan code for this provider (check "List Cable Plan Codes" in your PeyFlex dashboard).
+              </span>
+            </div>
+
+            <div class="field">
+              <label class="field__label" for="phone">Phone number</label>
+              <input class="field__input" type="tel" id="phone" name="phone" placeholder="080XXXXXXXX" required pattern="^0\d{10}$" maxlength="11" />
             </div>
 
             <div class="field">
@@ -67,7 +72,7 @@
               </div>
             </div>
 
-            <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Subscribe</button>
+            <button class="btn btn--primary btn--block" type="submit" id="submit-btn" disabled>Verify IUC to continue</button>
           </form>
         </section>
 
@@ -90,19 +95,70 @@
     requireAuth();
 
     let selectedService = null;
+    let iucVerified = false;
+
+    const submitBtn = document.getElementById('submit-btn');
+    const verifyBtn = document.getElementById('verify-btn');
+    const verifyBanner = document.getElementById('verify-banner');
+    const errorBanner = document.getElementById('error-banner');
+    const smartcardInput = document.getElementById('smartcard');
+
+    function resetVerification() {
+      iucVerified = false;
+      verifyBanner.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Verify IUC to continue';
+    }
+
     document.querySelectorAll('.network-option').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
         btn.classList.add('is-selected');
         selectedService = btn.dataset.service;
+        resetVerification();
       });
     });
 
-    const packageSelect = document.getElementById('package');
-    const amountInput = document.getElementById('amount');
-    packageSelect.addEventListener('change', () => {
-      const opt = packageSelect.selectedOptions[0];
-      amountInput.value = opt?.dataset.amount || '';
+    smartcardInput.addEventListener('input', resetVerification);
+
+    verifyBtn.addEventListener('click', async () => {
+      errorBanner.classList.remove('is-visible');
+      const iuc = smartcardInput.value.trim();
+
+      if (!selectedService) {
+        errorBanner.textContent = 'Select a cable provider first.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!iuc) {
+        errorBanner.textContent = 'Enter your smartcard / IUC number first.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(verifyBtn, true, 'Verifying…');
+      try {
+        const result = await api.validateCustomer({
+          service: 'cable',
+          smartcardNumber: iuc,
+          provider: selectedService,
+        });
+        if (result.status === 'SUCCESS') {
+          verifyBanner.textContent = `IUC verified${result.customer_name && result.customer_name !== 'UNKNOWN' ? `: ${result.customer_name}` : ''}.`;
+          verifyBanner.style.display = 'block';
+          iucVerified = true;
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Subscribe';
+        } else {
+          throw new Error(result.message || 'Could not verify this IUC number.');
+        }
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Could not verify this IUC number.';
+        errorBanner.classList.add('is-visible');
+        resetVerification();
+      } finally {
+        setButtonLoading(verifyBtn, false);
+      }
     });
 
     async function loadBalance() {
@@ -115,29 +171,28 @@
     }
 
     const form = document.getElementById('cable-form');
-    const errorBanner = document.getElementById('error-banner');
-    const submitBtn = document.getElementById('submit-btn');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBanner.classList.remove('is-visible');
 
-      const smartcardNumber = document.getElementById('smartcard').value.trim();
-      const packageCode = packageSelect.value;
-      const amount = Number(amountInput.value);
+      const smartcardNumber = smartcardInput.value.trim();
+      const packageCode = document.getElementById('package').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const amount = Number(document.getElementById('amount').value);
 
-      if (!selectedService) {
-        errorBanner.textContent = 'Select a cable provider to continue.';
-        errorBanner.classList.add('is-visible');
-        return;
-      }
-      if (!smartcardNumber) {
-        errorBanner.textContent = 'Enter your smartcard or IUC number.';
+      if (!iucVerified) {
+        errorBanner.textContent = 'Verify your IUC number before subscribing.';
         errorBanner.classList.add('is-visible');
         return;
       }
       if (!packageCode) {
-        errorBanner.textContent = 'Select a package.';
+        errorBanner.textContent = 'Enter the plan code.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!/^0\d{10}$/.test(phone)) {
+        errorBanner.textContent = 'Enter a valid 11-digit phone number.';
         errorBanner.classList.add('is-visible');
         return;
       }
@@ -149,11 +204,12 @@
 
       setButtonLoading(submitBtn, true, 'Processing…');
       try {
-        const result = await api.buyCable({ service: selectedService, smartcardNumber, packageCode, amount });
+        const result = await api.buyCable({ service: selectedService, smartcardNumber, packageCode, phone, amount });
         showToast(`Cable subscription ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
         form.reset();
         document.querySelectorAll('.network-option').forEach((el) => el.classList.remove('is-selected'));
         selectedService = null;
+        resetVerification();
         loadBalance();
       } catch (err) {
         errorBanner.textContent = err.message || 'Subscription failed. Please try again.';

@@ -25,16 +25,15 @@ const validateCustomer = asyncHandler(async (req, res) => {
 });
 
 /**
- * Shared purchase helper used by all VTU purchase endpoints.
+ * Shared purchase helper for all VTU services.
  *
- * Key fixes vs the original:
- *  1. asyncHandler — all DB/provider errors are forwarded to errorHandler.
- *  2. Atomic debit via wallet.debit() (findOneAndUpdate with balance >= amount)
- *     prevents concurrent requests from both passing the balance check.
- *  3. Balance in the response is read AFTER the debit so the value is accurate.
- *  4. Transaction is created with status 'pending' first, then updated to
- *     'success'/'failed' based on the provider response — prevents phantom
- *     success records if the provider call throws.
+ * PeyFlex's API resolves (success) or throws (failure) synchronously — no
+ * documented "pending" state. So the outcome is known immediately:
+ *   - provider call resolves -> mark transaction 'success', debit wallet
+ *   - provider call throws   -> mark transaction 'failed', do NOT debit
+ *
+ * The transaction is created as 'pending' first so a crash between the
+ * provider call and the status update still leaves an auditable record.
  */
 async function handlePurchase({ res, userId, amount, metadata, providerCall, details }) {
   const wallet = await Wallet.findOne({ user: userId });
@@ -49,47 +48,37 @@ async function handlePurchase({ res, userId, amount, metadata, providerCall, det
 
   const reference = generateReference();
 
-  // Create a pending transaction before calling the provider
   const transaction = await Transaction.create({
     user: userId,
     type: 'purchase',
     amount,
     status: 'pending',
     reference,
-    provider: 'VTU',
+    provider: 'PeyFlex',
     details,
     metadata,
   });
 
   let providerResponse;
-  let status = 'failed';
-
   try {
-    providerResponse = await providerCall(reference);
-    status =
-      providerResponse.status === 'success' || providerResponse.success
-        ? 'success'
-        : 'pending';
+    providerResponse = await providerCall();
   } catch (err) {
-    // Provider call failed — mark transaction failed, do NOT debit
     transaction.status = 'failed';
     transaction.details = err.message || 'Provider call failed';
+    transaction.metadata = { ...transaction.metadata, providerError: err.peyflexResponse || err.message };
     await transaction.save();
     throw err;
   }
 
-  // Atomic debit — only runs when provider succeeded
-  if (status === 'success') {
-    await wallet.debit(amount); // throws if balance insufficient (race safety)
-  }
+  const updatedWallet = await wallet.debit(amount);
 
-  transaction.status = status;
+  transaction.status = 'success';
   transaction.metadata = { ...transaction.metadata, providerResponse };
   await transaction.save();
 
   return res.status(200).json({
-    message: 'Purchase request processed',
-    balance: wallet.balance, // post-debit value from the atomic update
+    message: 'Purchase completed successfully',
+    balance: updatedWallet.balance,
     transaction,
     providerResponse,
   });
@@ -107,8 +96,7 @@ const purchaseAirtime = asyncHandler(async (req, res) => {
     amount,
     details: `Airtime purchase for ${phone}`,
     metadata: { service: 'airtime', network, phone },
-    providerCall: (reference) =>
-      vtuProvider.purchaseAirtime({ network, phone, amount, reference }),
+    providerCall: () => vtuProvider.purchaseAirtime({ network, phone, amount }),
   });
 });
 
@@ -124,18 +112,15 @@ const purchaseData = asyncHandler(async (req, res) => {
     amount,
     details: `Data bundle purchase for ${phone}`,
     metadata: { service: 'data', network, phone, bundleCode },
-    providerCall: (reference) =>
-      vtuProvider.purchaseData({ network, phone, bundleCode, amount, reference }),
+    providerCall: () => vtuProvider.purchaseData({ network, phone, bundleCode }),
   });
 });
 
 const purchaseCable = asyncHandler(async (req, res) => {
-  const { service, smartcardNumber, packageCode, amount } = req.body;
-  if (!service || !smartcardNumber || !packageCode || !amount) {
+  const { service, smartcardNumber, packageCode, amount, phone } = req.body;
+  if (!service || !smartcardNumber || !packageCode || !amount || !phone) {
     res.status(400);
-    throw new Error(
-      'Service, smartcardNumber, packageCode, and amount are required for cable purchase'
-    );
+    throw new Error('service, smartcardNumber, packageCode, phone, and amount are required for cable purchase');
   }
   await handlePurchase({
     res,
@@ -143,18 +128,15 @@ const purchaseCable = asyncHandler(async (req, res) => {
     amount,
     details: `Cable purchase for ${service}`,
     metadata: { service: 'cable', providerService: service, smartcardNumber, packageCode },
-    providerCall: (reference) =>
-      vtuProvider.purchaseCable({ service, smartcardNumber, packageCode, amount, reference }),
+    providerCall: () => vtuProvider.purchaseCable({ service, smartcardNumber, packageCode, phone, amount }),
   });
 });
 
 const purchaseElectricity = asyncHandler(async (req, res) => {
-  const { distributor, meterNumber, meterType, amount } = req.body;
-  if (!distributor || !meterNumber || !amount) {
+  const { distributor, meterNumber, meterType, amount, phone } = req.body;
+  if (!distributor || !meterNumber || !amount || !phone) {
     res.status(400);
-    throw new Error(
-      'Distributor, meterNumber, and amount are required for electricity purchase'
-    );
+    throw new Error('Distributor, meterNumber, amount, and phone are required for electricity purchase');
   }
   await handlePurchase({
     res,
@@ -162,8 +144,7 @@ const purchaseElectricity = asyncHandler(async (req, res) => {
     amount,
     details: `Electricity purchase for meter ${meterNumber}`,
     metadata: { service: 'electricity', distributor, meterNumber, meterType },
-    providerCall: (reference) =>
-      vtuProvider.purchaseElectricity({ distributor, meterNumber, meterType, amount, reference }),
+    providerCall: () => vtuProvider.purchaseElectricity({ distributor, meterNumber, meterType, amount, phone }),
   });
 });
 

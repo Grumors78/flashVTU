@@ -25,26 +25,34 @@
       <div class="grid grid--2" style="align-items: start;">
         <section class="card card--pad">
           <div class="auth-error-banner" id="error-banner" role="alert"></div>
+          <div class="auth-error-banner is-visible" id="verify-banner" style="background: var(--accent-bg); border-color: var(--accent-dim); color: var(--accent); display:none;"></div>
 
           <form id="electricity-form" novalidate>
             <div class="field">
               <label class="field__label" for="distributor">Distribution company (disco)</label>
               <select class="field__select" id="distributor" name="distributor" required>
                 <option value="" disabled selected>Select your disco</option>
-                <option value="ikedc">Ikeja Electric (IKEDC)</option>
-                <option value="ekedc">Eko Electricity (EKEDC)</option>
-                <option value="aedc">Abuja Electricity (AEDC)</option>
-                <option value="phed">Port Harcourt Electric (PHED)</option>
-                <option value="ibedc">Ibadan Electricity (IBEDC)</option>
-                <option value="kedco">Kano Electricity (KEDCO)</option>
-                <option value="eedc">Enugu Electricity (EEDC)</option>
+                <option value="abuja-electric">Abuja Electric (AEDC)</option>
+                <option value="benin-electric">Benin Electric (BEDC)</option>
+                <option value="eko-electric">Eko Electric (EKEDC)</option>
+                <option value="enugu-electric">Enugu Electric (EEDC)</option>
+                <option value="ibadan-electric">Ibadan Electric (IBEDC)</option>
+                <option value="ikeja-electric">Ikeja Electric (IKEDC)</option>
+                <option value="jos-electric">Jos Electric (JED)</option>
+                <option value="kaduna-electric">Kaduna Electric (KAEDCO)</option>
+                <option value="kano-electric">Kano Electric (KEDCO)</option>
+                <option value="portharcourt-electric">Port Harcourt Electric (PHED)</option>
+                <option value="yola-electric">Yola Electric (YEDC)</option>
               </select>
+              <span class="field__error" style="color: var(--text-tertiary);">
+                Disco codes confirmed from PeyFlex's API docs (e.g. "kaduna-electric", "benin-electric"). If a purchase fails with an unknown-plan error, check your PeyFlex dashboard for the exact code list.
+              </span>
             </div>
 
             <div class="field">
               <label class="field__label">Meter type</label>
               <div class="chip-row" id="meter-type-row">
-                <button type="button" class="chip" data-meter-type="prepaid">Prepaid</button>
+                <button type="button" class="chip is-selected" data-meter-type="prepaid">Prepaid</button>
                 <button type="button" class="chip" data-meter-type="postpaid">Postpaid</button>
               </div>
             </div>
@@ -53,6 +61,13 @@
               <label class="field__label" for="meterNumber">Meter number</label>
               <input class="field__input" type="text" id="meterNumber" name="meterNumber" placeholder="e.g. 04012345678" required />
             </div>
+
+            <div class="field">
+              <label class="field__label" for="phone">Phone number</label>
+              <input class="field__input" type="tel" id="phone" name="phone" placeholder="080XXXXXXXX" required pattern="^0\d{10}$" maxlength="11" />
+            </div>
+
+            <button class="btn btn--secondary btn--block" type="button" id="verify-btn" style="margin-bottom: var(--space-4);">Verify meter number</button>
 
             <div class="field">
               <label class="field__label" for="amount">Amount</label>
@@ -68,7 +83,7 @@
               </div>
             </div>
 
-            <button class="btn btn--primary btn--block" type="submit" id="submit-btn">Pay bill</button>
+            <button class="btn btn--primary btn--block" type="submit" id="submit-btn" disabled>Verify meter to continue</button>
           </form>
         </section>
 
@@ -90,12 +105,15 @@
   <script>
     requireAuth();
 
-    let selectedMeterType = null;
+    let selectedMeterType = 'prepaid';
+    let meterVerified = false;
+
     document.querySelectorAll('#meter-type-row .chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         document.querySelectorAll('#meter-type-row .chip').forEach((c) => c.classList.remove('is-selected'));
         chip.classList.add('is-selected');
         selectedMeterType = chip.dataset.meterType;
+        resetVerification();
       });
     });
 
@@ -108,6 +126,64 @@
       });
     });
 
+    const distributorSelect = document.getElementById('distributor');
+    const meterNumberInput = document.getElementById('meterNumber');
+    const verifyBtn = document.getElementById('verify-btn');
+    const verifyBanner = document.getElementById('verify-banner');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorBanner = document.getElementById('error-banner');
+
+    function resetVerification() {
+      meterVerified = false;
+      verifyBanner.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Verify meter to continue';
+    }
+
+    [distributorSelect, meterNumberInput].forEach((el) => el.addEventListener('input', resetVerification));
+
+    verifyBtn.addEventListener('click', async () => {
+      errorBanner.classList.remove('is-visible');
+      const distributor = distributorSelect.value;
+      const meterNumber = meterNumberInput.value.trim();
+
+      if (!distributor) {
+        errorBanner.textContent = 'Select your distribution company first.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+      if (!meterNumber) {
+        errorBanner.textContent = 'Enter your meter number first.';
+        errorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(verifyBtn, true, 'Verifying…');
+      try {
+        const result = await api.validateCustomer({
+          service: 'electricity',
+          distributor,
+          meterNumber,
+          meterType: selectedMeterType,
+        });
+        if (result.status === 'SUCCESS') {
+          verifyBanner.textContent = `Meter verified: ${result.customer_name}`;
+          verifyBanner.style.display = 'block';
+          meterVerified = true;
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Pay bill';
+        } else {
+          throw new Error(result.message || 'Could not verify this meter number.');
+        }
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Could not verify this meter number.';
+        errorBanner.classList.add('is-visible');
+        resetVerification();
+      } finally {
+        setButtonLoading(verifyBtn, false);
+      }
+    });
+
     async function loadBalance() {
       try {
         const wallet = await api.getWallet();
@@ -118,24 +194,23 @@
     }
 
     const form = document.getElementById('electricity-form');
-    const errorBanner = document.getElementById('error-banner');
-    const submitBtn = document.getElementById('submit-btn');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBanner.classList.remove('is-visible');
 
-      const distributor = document.getElementById('distributor').value;
-      const meterNumber = document.getElementById('meterNumber').value.trim();
+      const distributor = distributorSelect.value;
+      const meterNumber = meterNumberInput.value.trim();
+      const phone = document.getElementById('phone').value.trim();
       const amount = Number(amountInput.value);
 
-      if (!distributor) {
-        errorBanner.textContent = 'Select your distribution company.';
+      if (!meterVerified) {
+        errorBanner.textContent = 'Verify your meter number before paying.';
         errorBanner.classList.add('is-visible');
         return;
       }
-      if (!meterNumber) {
-        errorBanner.textContent = 'Enter your meter number.';
+      if (!/^0\d{10}$/.test(phone)) {
+        errorBanner.textContent = 'Enter a valid 11-digit phone number.';
         errorBanner.classList.add('is-visible');
         return;
       }
@@ -147,11 +222,13 @@
 
       setButtonLoading(submitBtn, true, 'Processing…');
       try {
-        const result = await api.buyElectricity({ distributor, meterNumber, meterType: selectedMeterType || 'prepaid', amount });
+        const result = await api.buyElectricity({ distributor, meterNumber, meterType: selectedMeterType, amount, phone });
         showToast(`Bill payment ${result.transaction?.status === 'success' ? 'successful' : 'submitted'}.`, 'success');
         form.reset();
         document.querySelectorAll('.chip').forEach((el) => el.classList.remove('is-selected'));
-        selectedMeterType = null;
+        document.querySelector('[data-meter-type="prepaid"]').classList.add('is-selected');
+        selectedMeterType = 'prepaid';
+        resetVerification();
         loadBalance();
       } catch (err) {
         errorBanner.textContent = err.message || 'Payment failed. Please try again.';

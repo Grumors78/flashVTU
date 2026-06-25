@@ -28,23 +28,26 @@
 
           <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Network</label>
           <div class="network-grid" id="network-grid">
-            <button type="button" class="network-option" data-network="mtn">
+            <button type="button" class="network-option" data-network="mtn_data_share">
               <span class="network-option__badge" style="background:#FFD200; color:#1A1A1A;">MTN</span>
               <span class="network-option__name">MTN</span>
             </button>
-            <button type="button" class="network-option" data-network="airtel">
+            <button type="button" class="network-option" data-network="airtel_data">
               <span class="network-option__badge" style="background:#FF0000;">A</span>
               <span class="network-option__name">Airtel</span>
             </button>
-            <button type="button" class="network-option" data-network="glo">
+            <button type="button" class="network-option" data-network="glo_data">
               <span class="network-option__badge" style="background:#00A651;">G</span>
               <span class="network-option__name">Glo</span>
             </button>
-            <button type="button" class="network-option" data-network="9mobile">
+            <button type="button" class="network-option" data-network="9mobile_data">
               <span class="network-option__badge" style="background:#00B14E;">9</span>
               <span class="network-option__name">9mobile</span>
             </button>
           </div>
+          <span class="field__error" style="color: var(--text-tertiary); display:block; margin-top: var(--space-2);">
+            Network codes shown are confirmed from PeyFlex's docs for MTN ("mtn_data_share"); the others follow the same pattern but check "Query Data Networks List" in your dashboard to confirm exact codes for Airtel/Glo/9mobile.
+          </span>
 
           <div class="field">
             <label class="field__label" for="phone">Phone number</label>
@@ -111,8 +114,8 @@
         }
         plansList.innerHTML = plans.map((plan, i) => `
           <button type="button" class="chip" style="display:flex; justify-content:space-between; width:100%; margin-bottom:8px; text-align:left;" data-plan-index="${i}">
-            <span>${plan.name || plan.title || plan.bundleCode}</span>
-            <span class="numeric">₦${formatNaira(plan.amount || plan.price || 0)}</span>
+            <span>${plan.label || plan.plan_code}</span>
+            <span class="numeric">₦${formatNaira(plan.amount || 0)}</span>
           </button>
         `).join('');
 
@@ -122,8 +125,8 @@
             btn.classList.add('is-selected');
             const plan = plans[Number(btn.dataset.planIndex)];
             selectedPlan = {
-              bundleCode: plan.bundleCode || plan.code,
-              amount: plan.amount || plan.price || 0,
+              bundleCode: plan.plan_code,
+              amount: plan.amount || 0,
             };
             updateSubmitState();
           });
