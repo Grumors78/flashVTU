@@ -99,6 +99,8 @@ const api = {
   purchase: (payload) => apiRequest('/wallet/purchase', { method: 'POST', body: payload }),
 
   // ---- VTU ----
+  getAirtimeNetworks: () => apiRequest('/vtu/airtime-networks'),
+  getDataNetworks: () => apiRequest('/vtu/data-networks'),
   getDataPlans: (network) => apiRequest(`/vtu/data-plans?network=${encodeURIComponent(network)}`),
   validateCustomer: (payload) => apiRequest('/vtu/validate', { method: 'POST', body: payload }),
   buyAirtime: (payload) => apiRequest('/vtu/airtime', { method: 'POST', body: payload }),

@@ -13,9 +13,9 @@ const axios = require('axios');
  *       not "Bearer", and not the raw key alone).
  *
  * Endpoints used:
- *   GET  /airtime/networks/        - list airtime network codes
- *   POST /airtime/purchase/        - buy airtime
- *   GET  /data/networks/           - list data network codes
+ *   GET  /airtime/networks/        - list airtime network codes (no auth)
+ *   POST /airtime/topup/           - buy airtime
+ *   GET  /data/networks/           - list data network codes (no auth)
  *   GET  /data/plans/?network=...  - list data plans for a network
  *   POST /data/purchase/           - buy a data plan
  *   GET  /cable/providers/         - list cable providers
@@ -100,22 +100,44 @@ async function get(path, params, { auth = true } = {}) {
 
 // ---------- Airtime ----------
 
-const getAirtimeNetworks = async () => get('/airtime/networks/');
+/**
+ * Confirmed via PeyFlex's "Query Airtime Network Lists" endpoint:
+ *   GET /airtime/networks/ (no auth) -> { networks: [{id:"mtn",name:"MTN"}, ...] }
+ * Network ids are plain: mtn, glo, airtel. 9mobile wasn't shown in the
+ * captured list but follows the same flat-id pattern as the other three.
+ */
+const getAirtimeNetworks = async () => get('/airtime/networks/', undefined, { auth: false });
 
+/**
+ * Confirmed shape: POST /airtime/topup/
+ * { network: "mtn", amount: 100, mobile_number: "08144216361" }
+ * Note: amount is a number here, not a string (unlike data/cable/electricity
+ * which all confirmed string amounts) — kept exactly as PeyFlex's example shows.
+ */
 const purchaseAirtime = async ({ network, phone, amount }) => {
   if (!network || !phone || !amount) {
     throw new Error('Network, phone, and amount are required for airtime purchase');
   }
-  return post('/airtime/purchase/', {
+  return post('/airtime/topup/', {
     network,
+    amount: Number(amount),
     mobile_number: phone,
-    amount: String(amount),
   });
 };
 
 // ---------- Data ----------
 
-const getDataNetworks = async () => get('/data/networks/');
+/**
+ * Confirmed via PeyFlex's "Query Data Networks List" endpoint
+ * (GET /data/networks/) — full confirmed list of 6 variants:
+ *   mtn_gifting_data   "MTN (Gifting)"
+ *   glo_data           "GLO DATA"
+ *   airtel_data        "AIRTEL (GIFTING)"
+ *   9mobile_data       "9MOBILE"
+ *   9mobile_gifting    "9MOBILE (GIFTING)"
+ *   mtn_data_share     "MTN (Data Share)"
+ */
+const getDataNetworks = async () => get('/data/networks/', undefined, { auth: false });
 
 /**
  * Confirmed shape: GET /data/plans/?network=mtn_gifting_data

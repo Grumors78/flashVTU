@@ -29,22 +29,10 @@
           <form id="airtime-form" novalidate>
             <label class="field__label" style="margin-bottom: var(--space-2); display:block;">Network</label>
             <div class="network-grid" id="network-grid">
-              <button type="button" class="network-option" data-network="mtn">
-                <span class="network-option__badge" style="background:#FFD200; color:#1A1A1A;">MTN</span>
-                <span class="network-option__name">MTN</span>
-              </button>
-              <button type="button" class="network-option" data-network="airtel">
-                <span class="network-option__badge" style="background:#FF0000;">A</span>
-                <span class="network-option__name">Airtel</span>
-              </button>
-              <button type="button" class="network-option" data-network="glo">
-                <span class="network-option__badge" style="background:#00A651;">G</span>
-                <span class="network-option__name">Glo</span>
-              </button>
-              <button type="button" class="network-option" data-network="9mobile">
-                <span class="network-option__badge" style="background:#00B14E;">9</span>
-                <span class="network-option__name">9mobile</span>
-              </button>
+              <div class="skeleton" style="height:88px;"></div>
+              <div class="skeleton" style="height:88px;"></div>
+              <div class="skeleton" style="height:88px;"></div>
+              <div class="skeleton" style="height:88px;"></div>
             </div>
 
             <div class="field">
@@ -89,13 +77,46 @@
     requireAuth();
 
     let selectedNetwork = null;
-    document.querySelectorAll('.network-option').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
-        btn.classList.add('is-selected');
-        selectedNetwork = btn.dataset.network;
+
+    // Confirmed fallback list (PeyFlex "Query Airtime Network Lists"), used
+    // only if the live endpoint is unreachable — keeps the page usable either way.
+    const FALLBACK_NETWORKS = [
+      { id: 'mtn', name: 'MTN', color: '#FFD200', text: '#1A1A1A' },
+      { id: 'glo', name: 'GLO', color: '#00A651', text: '#FFFFFF' },
+      { id: 'airtel', name: 'AIRTEL', color: '#FF0000', text: '#FFFFFF' },
+      { id: '9mobile', name: '9MOBILE', color: '#00B14E', text: '#FFFFFF' },
+    ];
+
+    function renderNetworks(networks) {
+      const grid = document.getElementById('network-grid');
+      grid.innerHTML = networks.map((net) => `
+        <button type="button" class="network-option" data-network="${net.id}">
+          <span class="network-option__badge" style="background:${net.color}; color:${net.text};">${net.name.slice(0, 2)}</span>
+          <span class="network-option__name">${net.name}</span>
+        </button>
+      `).join('');
+
+      grid.querySelectorAll('.network-option').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          grid.querySelectorAll('.network-option').forEach((b) => b.classList.remove('is-selected'));
+          btn.classList.add('is-selected');
+          selectedNetwork = btn.dataset.network;
+        });
       });
-    });
+    }
+
+    async function loadNetworks() {
+      try {
+        const result = await api.getAirtimeNetworks();
+        const networks = (result.networks || []).map((n) => {
+          const fallback = FALLBACK_NETWORKS.find((f) => f.id === n.id) || {};
+          return { id: n.id, name: n.name, color: fallback.color || '#344155', text: fallback.text || '#FFFFFF' };
+        });
+        renderNetworks(networks.length ? networks : FALLBACK_NETWORKS);
+      } catch (err) {
+        renderNetworks(FALLBACK_NETWORKS);
+      }
+    }
 
     const amountInput = document.getElementById('amount');
     document.querySelectorAll('.chip[data-amount]').forEach((chip) => {
@@ -158,6 +179,7 @@
       }
     });
 
+    loadNetworks();
     loadBalance();
   </script>
 </body>

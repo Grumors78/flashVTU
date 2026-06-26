@@ -4,6 +4,16 @@ const generateReference = require('../utils/generateReference');
 const vtuProvider = require('../services/vtuProvider');
 const asyncHandler = require('../middleware/asyncHandler');
 
+const getAirtimeNetworks = asyncHandler(async (req, res) => {
+  const result = await vtuProvider.getAirtimeNetworks();
+  res.json(result);
+});
+
+const getDataNetworks = asyncHandler(async (req, res) => {
+  const result = await vtuProvider.getDataNetworks();
+  res.json(result);
+});
+
 const getDataPlans = asyncHandler(async (req, res) => {
   const { network } = req.query;
   if (!network) {
@@ -159,6 +169,8 @@ const getTransactionStatus = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  getAirtimeNetworks,
+  getDataNetworks,
   getDataPlans,
   validateCustomer,
   purchaseAirtime,
