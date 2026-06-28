@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify email — QuickTopUp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <style>
+    .verify-shell {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--space-5);
+    }
+    .verify-card { width: 100%; max-width: 420px; text-align: center; }
+    .verify-icon { width: 48px; height: 48px; margin: 0 auto var(--space-4); }
+    .verify-icon.is-loading { color: var(--text-secondary); }
+    .verify-icon.is-success { color: var(--accent); }
+    .verify-icon.is-error { color: var(--error); }
+    .verify-title { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; margin-bottom: var(--space-2); }
+    .verify-desc { color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-5); }
+  </style>
+</head>
+<body>
+  <div class="verify-shell">
+    <div class="verify-card card card--pad fade-in" id="verify-card">
+      <div class="spinner verify-icon is-loading" style="width:32px;height:32px;margin:0 auto var(--space-4);"></div>
+      <h1 class="verify-title">Verifying your email…</h1>
+      <p class="verify-desc">This should only take a moment.</p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    async function run() {
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      const card = document.getElementById('verify-card');
+
+      if (!token) {
+        card.innerHTML = `
+          <svg class="verify-icon is-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+          <h1 class="verify-title">No verification token found</h1>
+          <p class="verify-desc">This link looks incomplete. Try opening the link from your email again, or request a new one from the app.</p>
+          <a href="login.html" class="btn btn--secondary">Back to sign in</a>`;
+        return;
+      }
+
+      try {
+        const result = await apiRequest(`/auth/verify-email/${encodeURIComponent(token)}`, { auth: false });
+        card.innerHTML = `
+          <svg class="verify-icon is-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+          <h1 class="verify-title">Email verified</h1>
+          <p class="verify-desc">${result.message || 'Your account is now active.'}</p>
+          <a href="${getToken() ? 'dashboard.html' : 'login.html'}" class="btn btn--primary">
+            ${getToken() ? 'Go to dashboard' : 'Sign in'}
+          </a>`;
+      } catch (err) {
+        card.innerHTML = `
+          <svg class="verify-icon is-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+          <h1 class="verify-title">Verification failed</h1>
+          <p class="verify-desc">${err.message || 'This link is invalid or has expired.'}</p>
+          <a href="login.html" class="btn btn--secondary">Back to sign in</a>`;
+      }
+    }
+    run();
+  </script>
+</body>
+</html>

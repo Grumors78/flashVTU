@@ -91,6 +91,7 @@ const api = {
   register: (payload) => apiRequest('/auth/register', { method: 'POST', body: payload, auth: false }),
   login: (payload) => apiRequest('/auth/login', { method: 'POST', body: payload, auth: false }),
   me: () => apiRequest('/auth/me'),
+  resendVerification: () => apiRequest('/auth/resend-verification', { method: 'POST' }),
 
   // ---- Wallet ----
   getWallet: () => apiRequest('/wallet'),

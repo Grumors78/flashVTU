@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema(
   {
@@ -19,13 +20,25 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, 'Password is required'],
-      // Enforced before hashing in the pre-save hook below
       minlength: [8, 'Password must be at least 8 characters'],
     },
     role: {
       type: String,
       enum: ['user', 'admin'],
       default: 'user',
+    },
+    // ---- Email verification ----
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationToken: {
+      type: String,
+      select: false, // never returned by default queries; opt in with .select('+verificationToken')
+    },
+    verificationTokenExpires: {
+      type: Date,
+      select: false,
     },
   },
   { timestamps: true }
@@ -34,7 +47,6 @@ const userSchema = new mongoose.Schema(
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
-  // Extra complexity check: require at least one letter and one digit
   const complexityRe = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
   if (!complexityRe.test(this.password)) {
     return next(
@@ -49,6 +61,19 @@ userSchema.pre('save', async function (next) {
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
+};
+
+/**
+ * Generates a fresh verification token (raw token returned to the caller
+ * for emailing; only its SHA-256 hash is stored on the document, same
+ * pattern as a password reset token — so a database leak alone can't be
+ * used to verify accounts).
+ */
+userSchema.methods.generateVerificationToken = function () {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  this.verificationToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  this.verificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  return rawToken;
 };
 
 module.exports = mongoose.model('User', userSchema);

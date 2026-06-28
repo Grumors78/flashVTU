@@ -29,7 +29,23 @@ const admin = (req, res, next) => {
   return res.status(403).json({ message: 'Admin access required' });
 };
 
-module.exports = {
-  protect,
-  admin,
+/**
+ * Blocks any request from a logged-in but unverified account. Mounted
+ * AFTER `protect` (needs req.user already populated) and BEFORE any
+ * money-moving or wallet-touching route. Per the project's enforcement
+ * decision: unverified users are blocked from everything except the
+ * verify/resend-verification endpoints themselves and basic profile
+ * read (getMe), so they can always see their own verification status
+ * and act on it.
+ */
+const requireVerified = (req, res, next) => {
+  if (req.user && req.user.isVerified) {
+    return next();
+  }
+  return res.status(403).json({
+    message: 'Please verify your email address before continuing. Check your inbox or request a new verification email.',
+    code: 'EMAIL_NOT_VERIFIED',
+  });
 };
+
+module.exports = { protect, admin, requireVerified };

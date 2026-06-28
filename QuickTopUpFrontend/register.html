@@ -91,7 +91,7 @@
       try {
         const data = await api.register({ name, email, password });
         setToken(data.token);
-        setStoredUser({ id: data.id, name: data.name, email: data.email, role: data.role });
+        setStoredUser({ id: data.id, name: data.name, email: data.email, role: data.role, isVerified: data.isVerified });
         location.href = 'dashboard.html';
       } catch (err) {
         showError(err.message || 'Something went wrong. Please try again.');

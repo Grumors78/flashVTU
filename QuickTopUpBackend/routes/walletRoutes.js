@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, requireVerified } = require('../middleware/authMiddleware');
 const { walletFundLimiters, vtuPurchaseLimiters } = require('../middleware/purchaseRateLimit');
 const {
   getWallet,
@@ -11,24 +11,24 @@ const {
 
 const router = express.Router();
 
+// Wallet balance is readable even when unverified, so a user can see their
+// own state (and the "please verify" prompts elsewhere can reference it).
 router.get('/', protect, getWallet);
 
-// Step 1: client calls this to get a Paystack payment URL.
-// Rate limited per-user AND per-IP (10/min each) — creates a pending
-// transaction and hits Paystack's API on every call.
-router.post('/initiate-fund', protect, ...walletFundLimiters, initiateFund);
+// Money-moving routes: protect -> requireVerified -> rate limit -> handler.
+// Order matters — we need to know who the user is (protect) before we can
+// check whether they're verified, and there's no point spending a rate-limit
+// slot on a request we're about to reject anyway for being unverified.
+router.post('/initiate-fund', protect, requireVerified, ...walletFundLimiters, initiateFund);
 
-// Step 2 (primary): Paystack calls this server-to-server after payment.
-// No `protect`, no rate limit — Paystack is the caller, not an end user;
-// signature verification inside the handler is the real gate here.
+// Paystack webhook — no `protect`, no `requireVerified`. Paystack is the
+// caller here, not an end user; the HMAC signature check inside the handler
+// is the real gate. The transaction this resolves was already created by an
+// already-verified user back when they called initiate-fund.
 router.post('/webhook/paystack', paystackWebhook);
 
-// Step 2 (fallback): frontend calls this when the user is redirected back
-// via callback_url, so funding can complete even if the webhook is delayed.
-router.get('/verify-fund/:reference', protect, verifyFund);
+router.get('/verify-fund/:reference', protect, requireVerified, verifyFund);
 
-// Generic wallet purchase/debit — same limiter tier as VTU purchases since
-// it directly debits the wallet on success.
-router.post('/purchase', protect, ...vtuPurchaseLimiters, purchase);
+router.post('/purchase', protect, requireVerified, ...vtuPurchaseLimiters, purchase);
 
 module.exports = router;

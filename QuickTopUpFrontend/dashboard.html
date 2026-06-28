@@ -106,6 +106,7 @@
   <script src="js/sidebar.js"></script>
   <script>
     requireAuth();
+    renderVerificationBanner();
 
     const user = getStoredUser();
     if (user?.name) {
