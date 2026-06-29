@@ -54,7 +54,7 @@ app.use(
 app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
-  res.json({ message: 'QuickTopUp backend is running.' });
+  res.json({ message: 'FlashVTU backend is running.' });
 });
 
 app.use('/api/auth', authRoutes);
@@ -67,7 +67,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`QuickTopUp backend listening on port ${PORT}`);
+  console.log(`FlashVTU backend listening on port ${PORT}`);
 
   /**
    * Reconciliation safety net — runs every 10 minutes. Catches wallet_fund

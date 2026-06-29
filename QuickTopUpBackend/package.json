@@ -1,12 +1,12 @@
 {
-  "name": "quicktopup-backend",
+  "name": "flashvtu-backend",
   "version": "0.1.0",
-  "description": "QuickTopUp VTU backend scaffold",
+  "description": "FlashVTU VTU backend scaffold",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "serve-frontend": "npx serve ../QuickTopUpFrontend -l 5000",
+    "serve-frontend": "npx serve ../FlashVTUFrontend -l 5000",
     "test": "node tests/api-test.js"
   },
   "dependencies": {

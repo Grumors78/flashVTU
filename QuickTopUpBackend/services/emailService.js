@@ -38,17 +38,17 @@ async function sendVerificationEmail({ to, name, token }) {
   }
 
   const verifyUrl = `${baseUrl}/verify-email.html?token=${encodeURIComponent(token)}`;
-  const fromAddress = process.env.EMAIL_FROM || 'QuickTopUp <onboarding@resend.dev>';
+  const fromAddress = process.env.EMAIL_FROM || 'FlashVTU <onboarding@resend.dev>';
 
   const { data, error } = await resend.emails.send({
     from: fromAddress,
     to,
-    subject: 'Confirm your QuickTopUp account',
+    subject: 'Confirm your FlashVTU account',
     html: `
       <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
         <h2 style="color: #0B0F14;">Hi ${name || 'there'},</h2>
         <p style="color: #344155; font-size: 15px; line-height: 1.5;">
-          Thanks for signing up for QuickTopUp. Confirm your email address to activate your wallet and start topping up.
+          Thanks for signing up for FlashVTU. Confirm your email address to activate your wallet and start topping up.
         </p>
         <p style="margin: 28px 0;">
           <a href="${verifyUrl}" style="background: #39FF88; color: #0B0F14; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
@@ -60,7 +60,7 @@ async function sendVerificationEmail({ to, name, token }) {
           <span style="font-family: monospace;">${verifyUrl}</span>
         </p>
         <p style="color: #5E6E80; font-size: 13px; margin-top: 24px;">
-          This link expires in 24 hours. If you didn't create a QuickTopUp account, you can ignore this email.
+          This link expires in 24 hours. If you didn't create a FlashVTU account, you can ignore this email.
         </p>
       </div>
     `,

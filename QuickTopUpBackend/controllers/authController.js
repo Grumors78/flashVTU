@@ -44,7 +44,7 @@ const registerUser = asyncHandler(async (req, res) => {
     role: user.role,
     isVerified: user.isVerified,
     token: generateToken(user._id),
-    message: 'Account created. Check your email to verify your account before using QuickTopUp.',
+    message: 'Account created. Check your email to verify your account before using FlashVTU.',
   });
 });
 
@@ -114,7 +114,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
   user.verificationTokenExpires = undefined;
   await user.save();
 
-  res.json({ message: 'Email verified successfully. You can now use your QuickTopUp account.' });
+  res.json({ message: 'Email verified successfully. You can now use your FlashVTU account.' });
 });
 
 /**
