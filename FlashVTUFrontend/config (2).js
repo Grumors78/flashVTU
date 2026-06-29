@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlashVTU</title>
+  <link rel="stylesheet" href="css/tokens.css" />
+</head>
+<body style="display:flex; align-items:center; justify-content:center; min-height:100vh;">
+  <div class="spinner" style="width:28px; height:28px; color: var(--accent);"></div>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    location.href = getToken() ? 'dashboard.html' : 'login.html';
+  </script>
+</body>
+</html>
