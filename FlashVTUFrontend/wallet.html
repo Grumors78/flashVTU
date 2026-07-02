@@ -101,26 +101,39 @@
 
     /**
      * If the user just came back from Paystack's checkout, the URL will have
-     * ?ref=<reference> from the callback_url we set in initiateFund. Verify it
-     * immediately so the balance updates without waiting on the webhook.
+     * When the user returns from Flutterwave checkout, the redirect URL carries:
+     *   ?tx_ref=<our reference>&transaction_id=<flw numeric id>&status=successful
+     * We read both and pass transaction_id to verifyFund so the backend can
+     * verify directly with Flutterwave instead of relying on the status param
+     * (which can't be trusted without server-side verification).
      */
-    async function checkPaystackReturn() {
+    async function checkFlutterwaveReturn() {
       const params = new URLSearchParams(location.search);
-      const reference = params.get('ref') || params.get('reference') || params.get('trxref');
+      const reference = params.get('ref') || params.get('tx_ref') || params.get('reference');
+      const transactionId = params.get('transaction_id');
+      const status = params.get('status');
       if (!reference) return;
 
       const successBanner = document.getElementById('success-banner');
       const errorBanner = document.getElementById('error-banner');
 
+      // If Flutterwave already tells us it was cancelled/failed, don't bother verifying
+      if (status === 'cancelled') {
+        errorBanner.textContent = 'Payment was cancelled. No funds were deducted.';
+        errorBanner.classList.add('is-visible');
+        history.replaceState({}, '', location.pathname);
+        return;
+      }
+
       try {
-        const result = await api.verifyFund(reference);
+        const result = await api.verifyFund(reference, transactionId);
         if (result.status === 'success') {
-          successBanner.textContent = `Payment confirmed. Your wallet has been credited.`;
+          successBanner.textContent = 'Payment confirmed. Your wallet has been credited.';
           successBanner.classList.add('is-visible');
           showToast('Wallet funded successfully', 'success');
           loadWallet();
         } else if (result.status === 'pending') {
-          successBanner.textContent = `Payment is still processing. This page will reflect your new balance shortly.`;
+          successBanner.textContent = 'Payment is still processing. Your balance will update shortly.';
           successBanner.classList.add('is-visible');
         } else {
           errorBanner.textContent = `Payment was not completed (status: ${result.status}). No funds were deducted.`;
@@ -130,7 +143,6 @@
         errorBanner.textContent = err.message || 'Could not confirm payment status.';
         errorBanner.classList.add('is-visible');
       } finally {
-        // Clean the query string so a page refresh doesn't re-trigger verification
         history.replaceState({}, '', location.pathname);
       }
     }
@@ -179,7 +191,7 @@
     });
 
     loadWallet();
-    checkPaystackReturn();
+    checkFlutterwaveReturn();
   </script>
 </body>
 </html>

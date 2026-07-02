@@ -96,7 +96,10 @@ const api = {
   // ---- Wallet ----
   getWallet: () => apiRequest('/wallet'),
   initiateFund: (amount) => apiRequest('/wallet/initiate-fund', { method: 'POST', body: { amount } }),
-  verifyFund: (reference) => apiRequest(`/wallet/verify-fund/${encodeURIComponent(reference)}`),
+  verifyFund: (reference, transactionId) => {
+    const qs = transactionId ? `?transaction_id=${encodeURIComponent(transactionId)}` : '';
+    return apiRequest(`/wallet/verify-fund/${encodeURIComponent(reference)}${qs}`);
+  },
   purchase: (payload) => apiRequest('/wallet/purchase', { method: 'POST', body: payload }),
 
   // ---- VTU ----

@@ -4,29 +4,26 @@ const { walletFundLimiters, vtuPurchaseLimiters } = require('../middleware/purch
 const {
   getWallet,
   initiateFund,
-  paystackWebhook,
+  flutterwaveWebhook,
   verifyFund,
   purchase,
 } = require('../controllers/walletController');
 
 const router = express.Router();
 
-// Wallet balance is readable even when unverified, so a user can see their
-// own state (and the "please verify" prompts elsewhere can reference it).
+// Wallet balance readable even when unverified
 router.get('/', protect, getWallet);
 
-// Money-moving routes: protect -> requireVerified -> rate limit -> handler.
-// Order matters — we need to know who the user is (protect) before we can
-// check whether they're verified, and there's no point spending a rate-limit
-// slot on a request we're about to reject anyway for being unverified.
+// Money-moving routes: protect -> requireVerified -> rate limit -> handler
 router.post('/initiate-fund', protect, requireVerified, ...walletFundLimiters, initiateFund);
 
-// Paystack webhook — no `protect`, no `requireVerified`. Paystack is the
-// caller here, not an end user; the HMAC signature check inside the handler
-// is the real gate. The transaction this resolves was already created by an
-// already-verified user back when they called initiate-fund.
-router.post('/webhook/paystack', paystackWebhook);
+// Flutterwave webhook — no protect, no requireVerified.
+// Flutterwave is the caller; verif-hash header verification happens inside the handler.
+// Raw body not needed here since Flutterwave uses a simple string hash, not HMAC.
+router.post('/webhook/flutterwave', flutterwaveWebhook);
 
+// Fallback: frontend calls this when user returns from Flutterwave checkout.
+// Accepts optional ?transaction_id= query param for Flutterwave's numeric ID.
 router.get('/verify-fund/:reference', protect, requireVerified, verifyFund);
 
 router.post('/purchase', protect, requireVerified, ...vtuPurchaseLimiters, purchase);

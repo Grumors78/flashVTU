@@ -35,22 +35,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-/**
- * Capture the raw request body BEFORE JSON parsing, but only for the Paystack
- * webhook route. Signature verification (HMAC-SHA512) must run against the
- * exact bytes Paystack sent — re-serializing req.body with JSON.stringify can
- * produce a different byte sequence (key order/whitespace) and silently break
- * verification. All other routes use the normal JSON parser untouched.
- */
-app.use(
-  express.json({
-    verify: (req, res, buf) => {
-      if (req.originalUrl === '/api/wallet/webhook/paystack') {
-        req.rawBody = buf.toString('utf8');
-      }
-    },
-  })
-);
+// Flutterwave webhook verification uses a simple verif-hash header comparison
+// (not HMAC-SHA512 like Paystack), so raw body capture is not needed here.
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
