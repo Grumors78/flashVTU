@@ -1,5 +1,5 @@
 const express = require('express');
-const { protect, requireVerified } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 const { vtuPurchaseLimiters } = require('../middleware/purchaseRateLimit');
 const {
   getAirtimeNetworks,
@@ -15,19 +15,18 @@ const {
 
 const router = express.Router();
 
-// Read-only lookups — browsing networks/plans doesn't move money, so these
-// stay available even to unverified accounts (lets them see what's on offer
-// before going through verification).
+// Read-only lookups
 router.get('/airtime-networks', protect, getAirtimeNetworks);
 router.get('/data-networks', protect, getDataNetworks);
 router.get('/data-plans', protect, getDataPlans);
 router.post('/validate', protect, validateCustomer);
 router.get('/transaction/:reference', protect, getTransactionStatus);
 
-// Purchase endpoints — protect -> requireVerified -> rate limit -> handler.
-router.post('/airtime', protect, requireVerified, ...vtuPurchaseLimiters, purchaseAirtime);
-router.post('/data', protect, requireVerified, ...vtuPurchaseLimiters, purchaseData);
-router.post('/cable', protect, requireVerified, ...vtuPurchaseLimiters, purchaseCable);
-router.post('/electricity', protect, requireVerified, ...vtuPurchaseLimiters, purchaseElectricity);
+// Purchase endpoints — email verification temporarily disabled pending domain setup.
+// Re-enable by adding `requireVerified` between `protect` and the rate limiters.
+router.post('/airtime', protect, ...vtuPurchaseLimiters, purchaseAirtime);
+router.post('/data', protect, ...vtuPurchaseLimiters, purchaseData);
+router.post('/cable', protect, ...vtuPurchaseLimiters, purchaseCable);
+router.post('/electricity', protect, ...vtuPurchaseLimiters, purchaseElectricity);
 
 module.exports = router;
