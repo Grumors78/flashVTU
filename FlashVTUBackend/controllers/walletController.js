@@ -14,6 +14,61 @@ const getWallet = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Returns the user's permanent virtual account details.
+ * If one doesn't exist yet, creates it automatically.
+ * Idempotent — safe to call on every wallet page load.
+ */
+const getVirtualAccount = asyncHandler(async (req, res) => {
+  let wallet = await Wallet.findOne({ user: req.user._id });
+  if (!wallet) {
+    res.status(404);
+    throw new Error('Wallet not found');
+  }
+
+  // Already has a virtual account — return it immediately
+  if (wallet.virtualAccount?.accountNumber) {
+    return res.json({
+      accountNumber: wallet.virtualAccount.accountNumber,
+      bankName: wallet.virtualAccount.bankName,
+      flwRef: wallet.virtualAccount.flwRef,
+    });
+  }
+
+  // First time — create one with Flutterwave
+  const user = req.user;
+  const nameParts = (user.name || '').trim().split(' ');
+  const firstname = nameParts[0] || 'FlashVTU';
+  const lastname = nameParts.slice(1).join(' ') || 'User';
+  const txRef = generateReference(); // unique per virtual account creation
+
+  const accountData = await flutterwave.createVirtualAccount({
+    email: user.email,
+    firstname,
+    lastname,
+    txRef,
+  });
+
+  wallet = await Wallet.findOneAndUpdate(
+    { _id: wallet._id },
+    {
+      virtualAccount: {
+        accountNumber: accountData.accountNumber,
+        bankName: accountData.bankName,
+        flwRef: accountData.flwRef,
+        createdAt: new Date(),
+      },
+    },
+    { new: true }
+  );
+
+  res.json({
+    accountNumber: wallet.virtualAccount.accountNumber,
+    bankName: wallet.virtualAccount.bankName,
+    flwRef: wallet.virtualAccount.flwRef,
+  });
+});
+
+/**
  * Step 1: client calls this to get a Flutterwave checkout link.
  * Creates a pending transaction, then asks Flutterwave to initialize a
  * checkout session. The wallet is NOT credited here — only the webhook
@@ -227,4 +282,4 @@ const purchase = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getWallet, initiateFund, flutterwaveWebhook, verifyFund, purchase };
+module.exports = { getWallet, getVirtualAccount, initiateFund, flutterwaveWebhook, verifyFund, purchase };

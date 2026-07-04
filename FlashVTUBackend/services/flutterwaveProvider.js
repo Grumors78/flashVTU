@@ -155,4 +155,48 @@ const verifyWebhookSignature = (headerHash) => {
   return headerHash === secretHash;
 };
 
-module.exports = { initializeTransaction, verifyTransaction, verifyByReference, verifyWebhookSignature };
+/**
+ * Create a permanent dedicated virtual account for a user.
+ * is_permanent: true means the account never expires and can receive
+ * unlimited transfers — ideal for a wallet funding use case.
+ *
+ * Confirmed endpoint: POST /v3/virtual-account-numbers
+ * Response: { data: { account_number, bank_name, flw_ref, ... } }
+ */
+const createVirtualAccount = async ({ email, firstname, lastname, phonenumber, txRef }) => {
+  ensureApiKey();
+  if (!email || !txRef) {
+    throw new Error('email and txRef are required to create a virtual account');
+  }
+
+  const payload = {
+    email,
+    is_permanent: true,
+    tx_ref: txRef,
+    currency: 'NGN',
+    narration: `FlashVTU wallet — ${firstname || ''} ${lastname || ''}`.trim(),
+  };
+
+  if (firstname) payload.firstname = firstname;
+  if (lastname) payload.lastname = lastname;
+  if (phonenumber) payload.phonenumber = phonenumber;
+
+  try {
+    const { data: res } = await client.post('/virtual-account-numbers', payload);
+    if (res.status !== 'success' || !res.data?.account_number) {
+      throw new Error(res.message || 'Flutterwave did not return a virtual account number');
+    }
+    return {
+      accountNumber: res.data.account_number,
+      bankName: res.data.bank_name,
+      flwRef: res.data.flw_ref,
+    };
+  } catch (error) {
+    if (error.response?.data) {
+      throw new Error(error.response.data.message || 'Virtual account creation failed');
+    }
+    throw error;
+  }
+};
+
+module.exports = { initializeTransaction, verifyTransaction, verifyByReference, createVirtualAccount, verifyWebhookSignature };

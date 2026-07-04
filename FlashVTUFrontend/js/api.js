@@ -95,6 +95,7 @@ const api = {
 
   // ---- Wallet ----
   getWallet: () => apiRequest('/wallet'),
+  getVirtualAccount: () => apiRequest('/wallet/virtual-account'),
   initiateFund: (amount) => apiRequest('/wallet/initiate-fund', { method: 'POST', body: { amount } }),
   verifyFund: (reference, transactionId) => {
     const qs = transactionId ? `?transaction_id=${encodeURIComponent(transactionId)}` : '';

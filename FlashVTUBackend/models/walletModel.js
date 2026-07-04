@@ -16,17 +16,21 @@ const walletSchema = new mongoose.Schema(
       type: String,
       default: 'NGN',
     },
-    // NOTE: updatedAt is removed here — { timestamps: true } below provides
-    // both createdAt and updatedAt automatically. Having both caused a duplicate
-    // field conflict where the manual field shadowed the Mongoose-managed one.
+    /**
+     * Permanent Flutterwave virtual account assigned to this wallet.
+     * Generated once on first funding request and stored here permanently.
+     * Users transfer to this account number anytime to fund their wallet.
+     */
+    virtualAccount: {
+      accountNumber: { type: String, default: null },
+      bankName: { type: String, default: null },
+      flwRef: { type: String, default: null },
+      createdAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
 
-/**
- * Credit the wallet by `amount`.
- * Uses findOneAndUpdate for atomicity — avoids lost-update races under concurrency.
- */
 walletSchema.methods.credit = async function (amount) {
   const updated = await this.constructor.findOneAndUpdate(
     { _id: this._id },
@@ -37,11 +41,6 @@ walletSchema.methods.credit = async function (amount) {
   return updated;
 };
 
-/**
- * Debit the wallet by `amount`.
- * Atomic check-and-decrement: only succeeds when balance >= amount,
- * preventing double-spend races between concurrent requests.
- */
 walletSchema.methods.debit = async function (amount) {
   const updated = await this.constructor.findOneAndUpdate(
     { _id: this._id, balance: { $gte: amount } },
