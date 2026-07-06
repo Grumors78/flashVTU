@@ -156,22 +156,25 @@ const verifyWebhookSignature = (headerHash) => {
 };
 
 /**
- * Create a permanent dedicated virtual account for a user.
- * is_permanent: true means the account never expires and can receive
- * unlimited transfers — ideal for a wallet funding use case.
+ * Create a temporary (dynamic) virtual account for a specific transaction.
+ * No BVN or NIN required — Flutterwave generates a one-time account tied
+ * to the exact amount. The account expires once the transfer is received.
  *
  * Confirmed endpoint: POST /v3/virtual-account-numbers
- * Response: { data: { account_number, bank_name, flw_ref, ... } }
+ * Required: email, amount, tx_ref
+ * Do NOT pass is_permanent: true — that's what triggers the BVN requirement.
+ *
+ * Response: { data: { account_number, bank_name, flw_ref, expiry_date, note } }
  */
-const createVirtualAccount = async ({ email, firstname, lastname, phonenumber, txRef }) => {
+const createTemporaryVirtualAccount = async ({ email, firstname, lastname, amount, txRef }) => {
   ensureApiKey();
-  if (!email || !txRef) {
-    throw new Error('email and txRef are required to create a virtual account');
+  if (!email || !amount || !txRef) {
+    throw new Error('email, amount, and txRef are required to create a virtual account');
   }
 
   const payload = {
     email,
-    is_permanent: true,
+    amount: Number(amount),
     tx_ref: txRef,
     currency: 'NGN',
     narration: `FlashVTU wallet — ${firstname || ''} ${lastname || ''}`.trim(),
@@ -179,7 +182,6 @@ const createVirtualAccount = async ({ email, firstname, lastname, phonenumber, t
 
   if (firstname) payload.firstname = firstname;
   if (lastname) payload.lastname = lastname;
-  if (phonenumber) payload.phonenumber = phonenumber;
 
   try {
     const { data: res } = await client.post('/virtual-account-numbers', payload);
@@ -190,6 +192,9 @@ const createVirtualAccount = async ({ email, firstname, lastname, phonenumber, t
       accountNumber: res.data.account_number,
       bankName: res.data.bank_name,
       flwRef: res.data.flw_ref,
+      expiryDate: res.data.expiry_date,
+      note: res.data.note,
+      amount: res.data.amount,
     };
   } catch (error) {
     if (error.response?.data) {
@@ -199,4 +204,4 @@ const createVirtualAccount = async ({ email, firstname, lastname, phonenumber, t
   }
 };
 
-module.exports = { initializeTransaction, verifyTransaction, verifyByReference, createVirtualAccount, verifyWebhookSignature };
+module.exports = { initializeTransaction, verifyTransaction, verifyByReference, createTemporaryVirtualAccount, verifyWebhookSignature };

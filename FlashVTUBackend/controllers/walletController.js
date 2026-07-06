@@ -14,57 +14,52 @@ const getWallet = asyncHandler(async (req, res) => {
 });
 
 /**
- * Returns the user's permanent virtual account details.
- * If one doesn't exist yet, creates it automatically.
- * Idempotent — safe to call on every wallet page load.
+ * Generates a temporary Flutterwave virtual account for a specific funding amount.
+ * The account is single-use and expires once the transfer is received.
+ * A pending transaction is created immediately so the webhook can match
+ * the incoming payment to the right user by tx_ref.
  */
-const getVirtualAccount = asyncHandler(async (req, res) => {
-  let wallet = await Wallet.findOne({ user: req.user._id });
-  if (!wallet) {
-    res.status(404);
-    throw new Error('Wallet not found');
+const createFundingAccount = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) {
+    res.status(400);
+    throw new Error('A positive amount is required');
   }
 
-  // Already has a virtual account — return it immediately
-  if (wallet.virtualAccount?.accountNumber) {
-    return res.json({
-      accountNumber: wallet.virtualAccount.accountNumber,
-      bankName: wallet.virtualAccount.bankName,
-      flwRef: wallet.virtualAccount.flwRef,
-    });
-  }
+  const reference = generateReference();
 
-  // First time — create one with Flutterwave
+  // Create pending transaction first so the webhook can find and credit it
+  await Transaction.create({
+    user: req.user._id,
+    type: 'wallet_fund',
+    amount,
+    status: 'pending',
+    reference,
+    provider: 'Flutterwave',
+    details: 'Wallet funding via virtual account — awaiting bank transfer',
+    metadata: { source: 'virtual_account' },
+  });
+
   const user = req.user;
   const nameParts = (user.name || '').trim().split(' ');
   const firstname = nameParts[0] || 'FlashVTU';
   const lastname = nameParts.slice(1).join(' ') || 'User';
-  const txRef = generateReference(); // unique per virtual account creation
 
-  const accountData = await flutterwave.createVirtualAccount({
+  const accountData = await flutterwave.createTemporaryVirtualAccount({
     email: user.email,
     firstname,
     lastname,
-    txRef,
+    amount,
+    txRef: reference,
   });
 
-  wallet = await Wallet.findOneAndUpdate(
-    { _id: wallet._id },
-    {
-      virtualAccount: {
-        accountNumber: accountData.accountNumber,
-        bankName: accountData.bankName,
-        flwRef: accountData.flwRef,
-        createdAt: new Date(),
-      },
-    },
-    { new: true }
-  );
-
   res.json({
-    accountNumber: wallet.virtualAccount.accountNumber,
-    bankName: wallet.virtualAccount.bankName,
-    flwRef: wallet.virtualAccount.flwRef,
+    accountNumber: accountData.accountNumber,
+    bankName: accountData.bankName,
+    amount,
+    reference,
+    expiryDate: accountData.expiryDate,
+    note: accountData.note,
   });
 });
 
@@ -282,4 +277,4 @@ const purchase = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getWallet, getVirtualAccount, initiateFund, flutterwaveWebhook, verifyFund, purchase };
+module.exports = { getWallet, createFundingAccount, initiateFund, flutterwaveWebhook, verifyFund, purchase };

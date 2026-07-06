@@ -16,17 +16,6 @@ const walletSchema = new mongoose.Schema(
       type: String,
       default: 'NGN',
     },
-    /**
-     * Permanent Flutterwave virtual account assigned to this wallet.
-     * Generated once on first funding request and stored here permanently.
-     * Users transfer to this account number anytime to fund their wallet.
-     */
-    virtualAccount: {
-      accountNumber: { type: String, default: null },
-      bankName: { type: String, default: null },
-      flwRef: { type: String, default: null },
-      createdAt: { type: Date, default: null },
-    },
   },
   { timestamps: true }
 );

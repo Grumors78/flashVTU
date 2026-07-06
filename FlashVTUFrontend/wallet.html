@@ -45,71 +45,93 @@
 
       <div class="grid grid--2" style="align-items: start;">
 
-        <!-- PRIMARY: Virtual account -->
+        <!-- PRIMARY: Bank transfer via temporary virtual account -->
         <section class="card card--pad">
           <h2 style="font-family: var(--font-display); font-size: var(--text-lg); margin-bottom: var(--space-2);">Bank transfer</h2>
-          <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-5);">
-            Transfer any amount to the account below from any Nigerian bank app. Your wallet is credited automatically within seconds.
+          <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-4);">
+            Enter an amount, generate a one-time account number, then transfer that exact amount from any Nigerian bank app. Your wallet is credited automatically.
           </p>
 
-          <div id="va-loading" style="margin-bottom: var(--space-4);">
-            <div class="skeleton" style="height: 20px; margin-bottom: 8px;"></div>
-            <div class="skeleton" style="height: 48px; margin-bottom: 8px;"></div>
-            <div class="skeleton" style="height: 20px;"></div>
-          </div>
+          <div class="auth-error-banner" id="va-error-banner" role="alert"></div>
 
-          <div id="va-details" style="display:none;">
-            <div style="margin-bottom: var(--space-4);">
-              <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-2);">Bank name</div>
-              <div style="font-size: var(--text-base); font-weight: 600;" id="va-bank-name">—</div>
-            </div>
-            <div style="margin-bottom: var(--space-4);">
-              <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-2);">Account number</div>
-              <div style="display: flex; align-items: center; gap: var(--space-3);">
-                <span style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.05em; color: var(--accent);" id="va-account-number">—</span>
-                <button class="btn btn--sm btn--ghost" id="copy-btn" type="button" title="Copy account number">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  Copy
-                </button>
+          <!-- Step 1: amount input -->
+          <div id="va-step-1">
+            <div class="field">
+              <label class="field__label" for="va-amount">Amount to fund</label>
+              <div class="amount-input">
+                <span class="amount-input__prefix">₦</span>
+                <input class="field__input" type="number" id="va-amount" min="100" step="50" placeholder="0.00" />
+              </div>
+              <div class="chip-row">
+                <button type="button" class="chip" data-va-amount="1000">₦1,000</button>
+                <button type="button" class="chip" data-va-amount="2000">₦2,000</button>
+                <button type="button" class="chip" data-va-amount="5000">₦5,000</button>
+                <button type="button" class="chip" data-va-amount="10000">₦10,000</button>
               </div>
             </div>
-            <div style="margin-bottom: var(--space-5);">
-              <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-2);">Account name</div>
-              <div style="font-size: var(--text-base);" id="va-account-name">FlashVTU</div>
-            </div>
-            <div style="background: var(--accent-bg); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); font-size: var(--text-xs); color: var(--accent);">
-              This is your permanent account number. You can transfer any amount at any time — no minimum, no expiry.
-            </div>
+            <button class="btn btn--primary btn--block" id="generate-va-btn" type="button">Generate account number</button>
           </div>
 
-          <div id="va-error" style="display:none; background: var(--error-bg); border: 1px solid var(--error); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--error); margin-top: var(--space-3);"></div>
+          <!-- Step 2: generated account details -->
+          <div id="va-step-2" style="display:none;">
+            <div style="background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-5); margin-bottom: var(--space-4);">
+              <div style="margin-bottom: var(--space-4);">
+                <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Bank name</div>
+                <div style="font-weight: 600;" id="va-bank-name">—</div>
+              </div>
+              <div style="margin-bottom: var(--space-4);">
+                <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Account number</div>
+                <div style="display: flex; align-items: center; gap: var(--space-3);">
+                  <span style="font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 700; letter-spacing: 0.05em; color: var(--accent);" id="va-account-number">—</span>
+                  <button class="btn btn--sm btn--ghost" id="copy-btn" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div style="margin-bottom: var(--space-4);">
+                <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Amount to transfer</div>
+                <div style="font-family: var(--font-mono); font-weight: 700; font-size: var(--text-lg); color: var(--warn);" id="va-amount-display">—</div>
+              </div>
+              <div id="va-expiry-row" style="display:none; margin-bottom: var(--space-4);">
+                <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Expires</div>
+                <div style="font-size: var(--text-sm);" id="va-expiry">—</div>
+              </div>
+            </div>
+
+            <div style="background: var(--warn-bg); border: 1px solid var(--warn); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); font-size: var(--text-xs); color: var(--warn); margin-bottom: var(--space-4);">
+              Transfer the <strong>exact amount</strong> shown above. Transferring a different amount may cause the payment to fail.
+            </div>
+
+            <button class="btn btn--ghost btn--block" id="generate-new-btn" type="button">Generate a new account number</button>
+          </div>
         </section>
 
         <!-- SECONDARY: Card payment via Flutterwave -->
         <section class="card card--pad">
           <h2 style="font-family: var(--font-display); font-size: var(--text-lg); margin-bottom: var(--space-2);">Pay by card</h2>
-          <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-5);">
-            Fund via debit or credit card. You'll be redirected to a secure Flutterwave checkout page.
+          <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-4);">
+            Fund via debit or credit card through Flutterwave's secure checkout page.
           </p>
 
-          <div class="auth-error-banner" id="error-banner" role="alert"></div>
-          <div class="auth-error-banner" id="success-banner" role="status" style="background: var(--accent-bg); border-color: var(--accent-dim); color: var(--accent);"></div>
+          <div class="auth-error-banner" id="card-error-banner" role="alert"></div>
+          <div class="auth-error-banner" id="card-success-banner" role="status" style="background: var(--accent-bg); border-color: var(--accent-dim); color: var(--accent);"></div>
 
           <form id="fund-form" novalidate>
             <div class="field">
-              <label class="field__label" for="amount">Amount</label>
+              <label class="field__label" for="card-amount">Amount</label>
               <div class="amount-input">
                 <span class="amount-input__prefix">₦</span>
-                <input class="field__input" type="number" id="amount" name="amount" min="100" step="50" placeholder="0.00" required />
+                <input class="field__input" type="number" id="card-amount" name="amount" min="100" step="50" placeholder="0.00" required />
               </div>
               <div class="chip-row">
-                <button type="button" class="chip" data-amount="1000">₦1,000</button>
-                <button type="button" class="chip" data-amount="2000">₦2,000</button>
-                <button type="button" class="chip" data-amount="5000">₦5,000</button>
-                <button type="button" class="chip" data-amount="10000">₦10,000</button>
+                <button type="button" class="chip" data-card-amount="1000">₦1,000</button>
+                <button type="button" class="chip" data-card-amount="2000">₦2,000</button>
+                <button type="button" class="chip" data-card-amount="5000">₦5,000</button>
+                <button type="button" class="chip" data-card-amount="10000">₦10,000</button>
               </div>
             </div>
-            <button class="btn btn--secondary btn--block" type="submit" id="submit-btn">Continue to card payment</button>
+            <button class="btn btn--secondary btn--block" type="submit" id="card-submit-btn">Continue to card payment</button>
           </form>
 
           <p style="font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-4); text-align:center;">
@@ -145,32 +167,61 @@
       }
     }
 
-    async function loadVirtualAccount() {
-      const loading = document.getElementById('va-loading');
-      const details = document.getElementById('va-details');
-      const vaError = document.getElementById('va-error');
+    // ---- Virtual account flow ----
+    const vaAmountInput = document.getElementById('va-amount');
+    const vaErrorBanner = document.getElementById('va-error-banner');
+    const vaStep1 = document.getElementById('va-step-1');
+    const vaStep2 = document.getElementById('va-step-2');
+    const generateVaBtn = document.getElementById('generate-va-btn');
+    const generateNewBtn = document.getElementById('generate-new-btn');
 
+    document.querySelectorAll('.chip[data-va-amount]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip[data-va-amount]').forEach((c) => c.classList.remove('is-selected'));
+        chip.classList.add('is-selected');
+        vaAmountInput.value = chip.dataset.vaAmount;
+      });
+    });
+
+    generateVaBtn.addEventListener('click', async () => {
+      vaErrorBanner.classList.remove('is-visible');
+      const amount = Number(vaAmountInput.value);
+      if (!amount || amount < 100) {
+        vaErrorBanner.textContent = 'Enter a minimum amount of ₦100 to continue.';
+        vaErrorBanner.classList.add('is-visible');
+        return;
+      }
+
+      setButtonLoading(generateVaBtn, true, 'Generating account…');
       try {
-        const va = await api.getVirtualAccount();
-        document.getElementById('va-bank-name').textContent = va.bankName || '—';
-        document.getElementById('va-account-number').textContent = va.accountNumber || '—';
+        const result = await api.createFundingAccount(amount);
 
-        // Account name is the user's name stored locally
-        const user = getStoredUser();
-        if (user?.name) {
-          document.getElementById('va-account-name').textContent = user.name;
+        document.getElementById('va-bank-name').textContent = result.bankName || '—';
+        document.getElementById('va-account-number').textContent = result.accountNumber || '—';
+        document.getElementById('va-amount-display').textContent = `₦${formatNaira(result.amount || amount)}`;
+
+        if (result.expiryDate && result.expiryDate !== 'N/A') {
+          document.getElementById('va-expiry').textContent = result.expiryDate;
+          document.getElementById('va-expiry-row').style.display = 'block';
         }
 
-        loading.style.display = 'none';
-        details.style.display = 'block';
+        vaStep1.style.display = 'none';
+        vaStep2.style.display = 'block';
       } catch (err) {
-        loading.style.display = 'none';
-        vaError.textContent = err.message || 'Could not load virtual account. Please refresh the page.';
-        vaError.style.display = 'block';
+        vaErrorBanner.textContent = err.message || 'Could not generate account number. Please try again.';
+        vaErrorBanner.classList.add('is-visible');
+      } finally {
+        setButtonLoading(generateVaBtn, false);
       }
-    }
+    });
 
-    // Copy account number to clipboard
+    generateNewBtn.addEventListener('click', () => {
+      vaStep2.style.display = 'none';
+      vaStep1.style.display = 'block';
+      vaAmountInput.value = '';
+      document.querySelectorAll('.chip[data-va-amount]').forEach((c) => c.classList.remove('is-selected'));
+    });
+
     document.getElementById('copy-btn').addEventListener('click', async () => {
       const accountNumber = document.getElementById('va-account-number').textContent;
       if (!accountNumber || accountNumber === '—') return;
@@ -184,58 +235,55 @@
           btn.style.color = '';
         }, 2000);
       } catch {
-        showToast('Could not copy — select and copy the number manually', 'error');
+        showToast('Could not copy — please copy the number manually', 'error');
       }
     });
 
-    // Quick-amount chips for card funding
-    const amountInput = document.getElementById('amount');
-    document.querySelectorAll('.chip[data-amount]').forEach((chip) => {
+    // ---- Card payment flow ----
+    const cardAmountInput = document.getElementById('card-amount');
+    document.querySelectorAll('.chip[data-card-amount]').forEach((chip) => {
       chip.addEventListener('click', () => {
-        document.querySelectorAll('.chip[data-amount]').forEach((c) => c.classList.remove('is-selected'));
+        document.querySelectorAll('.chip[data-card-amount]').forEach((c) => c.classList.remove('is-selected'));
         chip.classList.add('is-selected');
-        amountInput.value = chip.dataset.amount;
+        cardAmountInput.value = chip.dataset.cardAmount;
       });
     });
 
-    const form = document.getElementById('fund-form');
-    const errorBanner = document.getElementById('error-banner');
-    const successBanner = document.getElementById('success-banner');
-    const submitBtn = document.getElementById('submit-btn');
+    const fundForm = document.getElementById('fund-form');
+    const cardErrorBanner = document.getElementById('card-error-banner');
+    const cardSuccessBanner = document.getElementById('card-success-banner');
+    const cardSubmitBtn = document.getElementById('card-submit-btn');
 
-    form.addEventListener('submit', async (e) => {
+    fundForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorBanner.classList.remove('is-visible');
-      successBanner.classList.remove('is-visible');
+      cardErrorBanner.classList.remove('is-visible');
+      cardSuccessBanner.classList.remove('is-visible');
 
-      const amount = Number(amountInput.value);
+      const amount = Number(cardAmountInput.value);
       if (!amount || amount <= 0) {
-        errorBanner.textContent = 'Enter a valid amount to continue.';
-        errorBanner.classList.add('is-visible');
+        cardErrorBanner.textContent = 'Enter a valid amount to continue.';
+        cardErrorBanner.classList.add('is-visible');
         return;
       }
 
-      setButtonLoading(submitBtn, true, 'Preparing payment…');
+      setButtonLoading(cardSubmitBtn, true, 'Preparing payment…');
       try {
         const result = await api.initiateFund(amount);
         if (result.paymentUrl) {
           location.href = result.paymentUrl;
         } else {
-          successBanner.textContent = `Payment initiated. Reference: ${result.reference}.`;
-          successBanner.classList.add('is-visible');
+          cardSuccessBanner.textContent = `Payment initiated. Reference: ${result.reference}.`;
+          cardSuccessBanner.classList.add('is-visible');
         }
       } catch (err) {
-        errorBanner.textContent = err.message || 'Could not start payment. Please try again.';
-        errorBanner.classList.add('is-visible');
+        cardErrorBanner.textContent = err.message || 'Could not start payment. Please try again.';
+        cardErrorBanner.classList.add('is-visible');
       } finally {
-        setButtonLoading(submitBtn, false);
+        setButtonLoading(cardSubmitBtn, false);
       }
     });
 
-    /**
-     * Handle return from Flutterwave card checkout.
-     * Flutterwave redirect carries: tx_ref, transaction_id, status
-     */
+    // ---- Flutterwave card checkout return handler ----
     async function checkFlutterwaveReturn() {
       const params = new URLSearchParams(location.search);
       const reference = params.get('ref') || params.get('tx_ref') || params.get('reference');
@@ -244,8 +292,8 @@
       if (!reference) return;
 
       if (status === 'cancelled') {
-        errorBanner.textContent = 'Payment was cancelled. No funds were deducted.';
-        errorBanner.classList.add('is-visible');
+        cardErrorBanner.textContent = 'Payment was cancelled. No funds were deducted.';
+        cardErrorBanner.classList.add('is-visible');
         history.replaceState({}, '', location.pathname);
         return;
       }
@@ -253,27 +301,26 @@
       try {
         const result = await api.verifyFund(reference, transactionId);
         if (result.status === 'success') {
-          successBanner.textContent = 'Card payment confirmed. Your wallet has been credited.';
-          successBanner.classList.add('is-visible');
+          cardSuccessBanner.textContent = 'Card payment confirmed. Your wallet has been credited.';
+          cardSuccessBanner.classList.add('is-visible');
           showToast('Wallet funded successfully', 'success');
           loadWallet();
         } else if (result.status === 'pending') {
-          successBanner.textContent = 'Payment is still processing. Your balance will update shortly.';
-          successBanner.classList.add('is-visible');
+          cardSuccessBanner.textContent = 'Payment is still processing. Your balance will update shortly.';
+          cardSuccessBanner.classList.add('is-visible');
         } else {
-          errorBanner.textContent = `Payment was not completed (status: ${result.status}). No funds were deducted.`;
-          errorBanner.classList.add('is-visible');
+          cardErrorBanner.textContent = `Payment was not completed (status: ${result.status}). No funds were deducted.`;
+          cardErrorBanner.classList.add('is-visible');
         }
       } catch (err) {
-        errorBanner.textContent = err.message || 'Could not confirm payment status.';
-        errorBanner.classList.add('is-visible');
+        cardErrorBanner.textContent = err.message || 'Could not confirm payment status.';
+        cardErrorBanner.classList.add('is-visible');
       } finally {
         history.replaceState({}, '', location.pathname);
       }
     }
 
     loadWallet();
-    loadVirtualAccount();
     checkFlutterwaveReturn();
   </script>
 </body>

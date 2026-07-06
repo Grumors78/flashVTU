@@ -3,7 +3,7 @@ const { protect } = require('../middleware/authMiddleware');
 const { walletFundLimiters, vtuPurchaseLimiters } = require('../middleware/purchaseRateLimit');
 const {
   getWallet,
-  getVirtualAccount,
+  createFundingAccount,
   initiateFund,
   flutterwaveWebhook,
   verifyFund,
@@ -14,9 +14,9 @@ const router = express.Router();
 
 router.get('/', protect, getWallet);
 
-// Returns (and auto-creates if needed) the user's permanent virtual account.
-// Safe to call on every page load — idempotent.
-router.get('/virtual-account', protect, getVirtualAccount);
+// Generates a temporary virtual account for a specific funding amount.
+// POST because it creates a new pending transaction and calls Flutterwave.
+router.post('/create-funding-account', protect, ...walletFundLimiters, createFundingAccount);
 
 // Email verification enforcement temporarily disabled pending domain setup.
 // Re-enable by adding `requireVerified` between `protect` and the rate limiters
