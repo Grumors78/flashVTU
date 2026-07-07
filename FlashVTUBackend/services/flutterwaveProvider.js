@@ -177,7 +177,7 @@ const createTemporaryVirtualAccount = async ({ email, firstname, lastname, amoun
     amount: Number(amount),
     tx_ref: txRef,
     currency: 'NGN',
-    narration: `FlashVTU wallet — ${firstname || ''} ${lastname || ''}`.trim(),
+    narration: `FlashVTU ${firstname || ''} ${lastname || ''}`.trim(),
   };
 
   if (firstname) payload.firstname = firstname;

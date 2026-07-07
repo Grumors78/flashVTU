@@ -76,6 +76,10 @@
           <div id="va-step-2" style="display:none;">
             <div style="background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-5); margin-bottom: var(--space-4);">
               <div style="margin-bottom: var(--space-4);">
+                <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Account name</div>
+                <div style="font-weight: 600;" id="va-account-name">—</div>
+              </div>
+              <div style="margin-bottom: var(--space-4);">
                 <div style="font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: var(--space-1);">Bank name</div>
                 <div style="font-weight: 600;" id="va-bank-name">—</div>
               </div>
@@ -199,6 +203,11 @@
         document.getElementById('va-bank-name').textContent = result.bankName || '—';
         document.getElementById('va-account-number').textContent = result.accountNumber || '—';
         document.getElementById('va-amount-display').textContent = `₦${formatNaira(result.amount || amount)}`;
+
+        // Account name displayed as "FlashVTU + username" format
+        const user = getStoredUser();
+        const nameEl = document.getElementById('va-account-name');
+        if (nameEl && user?.name) nameEl.textContent = `FlashVTU ${user.name}`;
 
         if (result.expiryDate && result.expiryDate !== 'N/A') {
           document.getElementById('va-expiry').textContent = result.expiryDate;
